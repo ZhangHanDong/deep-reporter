@@ -2,12 +2,13 @@
 
 ## 摘要
 
-本报告以 2026-08 为时效锚点，基于 6 份宽探索、12 份维度深潜与一轮交叉验证，对 Rust 安全抽象与 unsafe Rust 的语义基础、别名模型、验证工具链、内核实践、政策环境与最佳实践进行全景调研；关键数据优先锚定官方文档、政府文件、顶会论文与官方公告等一手来源，部分背景引用二手来源（已在正文与参考文献中标注），并对冲突口径逐项裁定。核心结论如下：
+本报告以 2026-08-02 的调研底稿为基线，并已并入 2026-08-02 至 2026-10-27 的增量核查结果（数据时效至 2026-10-27），基于 6 份宽探索、12 份维度深潜与一轮交叉验证，对 Rust 安全抽象与 unsafe Rust 的语义基础、别名模型、验证工具链、内核实践、政策环境与最佳实践进行全景调研；关键数据优先锚定官方文档、政府文件、顶会论文与官方公告等一手来源，部分背景引用二手来源（已在正文与参考文献中标注），并对冲突口径逐项裁定。核心结论如下：
 
 - **现有有限证据与"风险重心位于 unsafe 边界"一致，但样本很小。** Linux 内核 Rust 驱动的 unsafe 代码占比为 0.76%–3.4%（驱动自身口径）[^1^]；Android 侧 Rust 漏洞密度估计为 0.2 个/百万行（仅基于单一 near-miss 的保守估计），较平台 C/C++ 历史值约 1000 个/百万行低约三个数量级[^2^]。截至 2026-08 锚点，首个公开分配 CVE 的内核 Rust 代码缺陷（CVE-2025-68260）恰恰发生在 SAFETY 注释遗漏的状态分支上[^3^]。一个内核 CVE 加一个 Android near-miss 不足以作统计性结论，只能说与"剩余风险集中于 unsafe 边界上的不变量论证"这一判断相符。
 - **工具链进入"验证入 CI"时代，但存在别名与并发盲区。** AWS 主导的 verify-rust-std 挑战已将标准库验证纳入持续集成，但 Kani 明确不建模 Stacked Borrows/Tree Borrows 别名规则、不支持并发，Miri 属动态检测，其论文微基准（计算密集负载）下的性能开销达 3,000–7,000 倍[^4^][^5^]。"已验证"声明的保证范围必须逐项核查。
-- **语义规范化双轨并进，Tree Borrows 定案是中期最大变量。** MiniRust 成为事实语义候选、Ferrocene Language Specification（FLS）于 2025-03 捐赠 Rust 项目[^6^]；别名模型在 Stacked Borrows 与 Tree Borrows 之间尚无 canonical 定案，T-opsem 团队 2026 年目标为发布"sound unsafe Rust"规范性文档。
-- **政策压力在上升，但尚无文件直接要求 unsafe 审计。** 美国 NSA/CISA 系列文件均为 non-binding 指南，欧盟《网络弹性法案》（CRA）技术中立、不指定语言，其报告义务于 2026-09-11 起适用（以 2026-08 锚点计尚未到期）[^7^][^8^]；与此同时，在 160 名问卷调查受访者中 88% 审计依赖 unsafe 的频率不足一半，审计供给明显不足[^9^]。unsafe 审计是否会成为供应链准入项，属本报告的推断而非政策文本。
+- **语义规范化双轨并进，Tree Borrows 定案是中期最大变量。** MiniRust 成为事实语义候选、Ferrocene Language Specification（FLS）于 2025-03 捐赠 Rust 项目[^6^]；别名模型在 Stacked Borrows 与 Tree Borrows 之间尚无 canonical 定案，T-opsem 团队 2026 年目标为发布"sound unsafe Rust"规范性文档；截至 2026-10 复核，语义层没有定案级事件（Tree Borrows 仍非 Miri 默认、rust#132898 仍 open、FLS 未见 rust-lang 自有首版、SAFETY 注释标准仍在 Pre-RFC）[^169^][^171^][^172^]。
+- **政策压力在上升，但尚无文件直接要求 unsafe 审计。** 美国 NSA/CISA 系列文件均为 non-binding 指南，欧盟《网络弹性法案》（CRA）技术中立、不指定语言，其漏洞报告义务已于 2026-09-11 起适用，主要义务仍在 2027-12-11[^7^][^8^][^186^]；与此同时，在 160 名问卷调查受访者中 88% 审计依赖 unsafe 的频率不足一半，审计供给明显不足[^9^]。unsafe 审计是否会成为供应链准入项，属本报告的推断而非政策文本。
+- **工程与产业层在 2026-08 至 10 月明显加速，风险面从 unsafe 本身扩展到工具链与供应链。** Rust 1.98/1.99 落地多项 unsafe 相关 API 与文档保证，Kani 0.68 的 Autoharness 开始支持泛型函数，verify-rust-std 认可工具增至 5 个（KMIR 于 2026-08-21 由审批转认可），微软自述将 Rust 列为内部 Tier-1 语言（厂商自述、单一来源）[^178^][^179^][^185^]；同时 arrayref 遭投毒、维护者遭定向社会工程攻击、Miri 环境变量经 CI 缓存泄漏 secrets，tokio 两条公告则分别暴露并发实现缺陷与"安全构造器被迫转为 unsafe"的抽象设计教训（见 5.3.3、8.3.3）[^190^][^191^][^192^][^193^][^194^]。
 
 报告第 2–3 章建立语义与别名模型的理论基础，第 4–5 章评估验证与检测工具生态，第 6 章复盘内核实践，第 7 章梳理政策与产业采纳，第 8 章提炼最佳实践，第 9 章展望学术前沿与趋势，第 10 章给出结论。
 
@@ -31,21 +32,21 @@
 
 #### 1.2.2 时效锚点、置信分级与冲突裁定规则
 
-本报告时效锚点为 **2026-08**，优先采用 2024–2026 年数据，更早数据（如微软 70% 的 2006–2018 口径）均在引用处注明年份。置信度分高/中/低三级：高置信要求 ≥2 个独立来源或一手来源直读确认；单一权威来源为中置信，正文保留来源归属；低置信素材（如 DARPA TRACTOR 的"95% 自动化、unsafe<5%"指标仅见单一第三方报道）加"据单一来源报道、待核实"限定语。冲突口径按交叉验证裁定呈现并注明依据，典型案例包括：Miri 性能开销以 POPL 论文 3,000–7,000 倍为准、二手博文的 10–50 倍口径标注差异[^5^]；"verify-rust-std 17 个工具白名单"经仓库直读证伪，官方 Approved 工具远少于 17 个（2026-10-27 复核：仓库 README 列 Flux、ESBMC、Kani、KMIR、VeriFast 5 个，tools.md 另含 RAPx 共 6 个；2026-08 抓取口径为 4 个，清单随时间变动，详见 9.2.1）[^4^]；"unsafe 行比 C 行更易错"的流行说法被 Google 实测否定[^2^]。调研遗留的未决问题（Tree Borrows 成为 Miri 默认无正式 FCP、rust-lang/rust #132898 miscompile 仍 open 等）在各章如实标注。
+本报告以 2026-08-02 的调研底稿为基线，2026-08-02 至 2026-10-27 的变化已核查一手来源并并入各章（并入内容均标注日期；无法回查或单一来源的条目保留限定语），整体数据时效锚点为 **2026-10-27**，优先采用 2024–2026 年数据，更早数据（如微软 70% 的 2006–2018 口径）均在引用处注明年份。置信度分高/中/低三级：高置信要求 ≥2 个独立来源或一手来源直读确认；单一权威来源为中置信，正文保留来源归属；低置信素材（如 DARPA TRACTOR 的"95% 自动化、unsafe<5%"指标仅见单一第三方报道）加"据单一来源报道、待核实"限定语。冲突口径按交叉验证裁定呈现并注明依据，典型案例包括：Miri 性能开销以 POPL 论文 3,000–7,000 倍为准、二手博文的 10–50 倍口径标注差异[^5^]；"verify-rust-std 17 个工具白名单"经仓库直读证伪，官方 Approved 工具远少于 17 个（2026-10-27 复核：仓库 README 列 Flux、ESBMC、Kani、KMIR、VeriFast 5 个，tools.md 另含 RAPx 共 6 个；2026-08 抓取口径为 4 个，清单随时间变动，详见 9.2.1）[^4^]；"unsafe 行比 C 行更易错"的流行说法被 Google 实测否定[^2^]。调研遗留的未决问题（Tree Borrows 成为 Miri 默认无正式 FCP、rust-lang/rust #132898 miscompile 仍 open 等）在各章如实标注。
 
 下表汇总本报告的调研维度划分、覆盖章节与代表性一手来源类型。
 
 | 调研维度 | 覆盖章节 | 代表性一手来源类型 | 数据时效 |
 |---|---|---|---|
-| 语义基础与 soundness 理论 | 第 2 章 | Reference、Rustonomicon、RFC 文本 | 至 2026-08 |
-| 别名模型与操作语义 | 第 3 章 | PLDI'25 论文、UCG issue、Miri README [^14^] | 至 2026-08 |
-| 验证工具链与检测工具生态 | 第 4–5 章 | verify-rust-std 仓库、POPL'26/ASE'26 论文、工具官方文档 [^4^][^5^] | 至 2026-08 |
-| 内核抽象与系统实践 | 第 6 章 | kernel.org 修复 commit、LPC 官方幻灯、ACSAC'24 论文 [^1^][^3^] | 至 2026-08 |
-| 政策环境与产业采纳 | 第 7 章 | NSA/CISA 官方 PDF、EUR-Lex 法规文本、Google 官方博文 [^7^][^8^][^2^] | 政策时间线至 2026-08 |
-| 最佳实践与供应链审计 | 第 8 章 | RustSec/MSR'26 论文、官方 lint 与审计工具文档 [^9^] | 2021.01–2025.04 数据快照 |
-| 学术前沿与趋势研判 | 第 9 章 | PLDI'26 等顶会论文、rust-lang 项目目标 | 至 2026-08 |
+| 语义基础与 soundness 理论 | 第 2 章 | Reference、Rustonomicon、RFC 文本 | 至 2026-10 |
+| 别名模型与操作语义 | 第 3 章 | PLDI'25 论文、UCG issue、Miri README [^14^] | 至 2026-10 |
+| 验证工具链与检测工具生态 | 第 4–5 章 | verify-rust-std 仓库、POPL'26/ASE'26 论文、工具官方文档 [^4^][^5^] | 至 2026-10 |
+| 内核抽象与系统实践 | 第 6 章 | kernel.org 修复 commit、LPC 官方幻灯、ACSAC'24 论文 [^1^][^3^] | 至 2026-10 |
+| 政策环境与产业采纳 | 第 7 章 | NSA/CISA 官方 PDF、EUR-Lex 法规文本、Google 官方博文 [^7^][^8^][^2^] | 政策时间线至 2026-10 |
+| 最佳实践与供应链审计 | 第 8 章 | RustSec/MSR'26 论文、官方 lint 与审计工具文档 [^9^] | 2021.01–2025.04 数据快照；2026-08–10 公告样本见 8.3.3 |
+| 学术前沿与趋势研判 | 第 9 章 | PLDI'26 等顶会论文、rust-lang 项目目标 | 至 2026-10 |
 
-该表反映出两个方法层面的结构性安排。其一，来源类型与各维度证据形态严格对齐：政策维度依赖政府原文 PDF 而非媒体转述（避免了"NSA 名单含 Python""Roadmaps 联署含德国"两类流传讹误），工具维度以仓库直读与论文全文为准（避免了"17 个白名单工具"等二手夸大）。其二，数据时效存在内在梯度：政策与工具链数据刷新至 2026-08，而 RustSec 漏洞库统计截止 2025-04、微软 CVE 口径止于 2023 年，各章引用时须沿用各自的统计窗口而非笼统标注"最新"，这是交叉验证阶段处理口径冲突后形成的统一规则。读者据此可将每章数据放回其对应时间点解读。
+该表反映出两个方法层面的结构性安排。其一，来源类型与各维度证据形态严格对齐：政策维度依赖政府原文 PDF 而非媒体转述（避免了"NSA 名单含 Python""Roadmaps 联署含德国"两类流传讹误），工具维度以仓库直读与论文全文为准（避免了"17 个白名单工具"等二手夸大）。其二，数据时效存在内在梯度：政策与工具链数据刷新至 2026-10，而 RustSec 漏洞库统计截止 2025-04、微软 CVE 口径止于 2023 年，各章引用时须沿用各自的统计窗口而非笼统标注"最新"，这是交叉验证阶段处理口径冲突后形成的统一规则。读者据此可将每章数据放回其对应时间点解读。
 
 ## 2. unsafe 的语义基础与 soundness 理论
 
@@ -90,6 +91,16 @@ lint 层面的另一条演进线是 `invalid_reference_casting`：未经 `Unsafe
 
 综合本章，unsafe 的正确心智模型是**证明义务而非漏洞**：`unsafe` 关键字不引入缺陷，而是把编译器无法自动核查的安全条件显式标记为程序员的责任清单。义务由谁定义、由谁消解、在何种语义下成立，正是 RFC 2585 框架、UB 清单与 soundness 定义三者共同回答的问题；而"在何种语义下成立"这最后一环——别名模型与操作语义的规范化——仍处未决状态，构成下一章的主题。
 
+#### 2.2.3 2026-08 至 10 月：Rust 1.98/1.99 的 unsafe 相关变化与编译器正确性事件
+
+**Rust 1.98.0（2026-08-20）**稳定了代数浮点方法（`algebraic_add` 等），允许编译器按实数代数性质重排浮点运算，官方明确"非确定但**从不导致 UB**"[^162^]。对 unsafe 生态更直接的有两点：其一，`ManuallyDrop` 与 `Box` 交互的文档保证——1.96.0 起"drop 后再 move `ManuallyDrop<Box<_>>`"不再是 UB，1.98.0 将这一行为写进文档成为**稳定保证**，这类"先把隐式语义变成显式承诺"的动作与 T-opsem 规范化的方向一致（该关联为本报告推断，官方公告未如此表述）[^162^]。其二，lint 层面新增 `invalid_runtime_symbol_definitions`（deny 默认）与 `suspicious_runtime_symbol_definitions`（warn 默认），针对 `memcmp`/`memset`/`strlen` 等 core 运行时符号的错误定义，并新增 `c_void_returns`（warn 默认）检查 `core::ffi::c_void` 作为返回类型，都是 FFI/链接期正确性问题[^163^]。
+
+**Rust 1.98.1（2026-09-03）**修复了 1.98.0 引入的 vtable 生成 miscompilation：特定情况下 rustc 会在 trait 对象 vtable 中把函数指针生成为空指针，**导致 emitted code 出现未定义行为**[^164^]。官方措辞强调，这不只是段错误，空指针可被用作"任意效果"的正当化依据。该事件与 3.1.2 的 #132898（优化先于语义）同属编译器正确性问题，但成因不同，不宜视为同一风险族：**Rust 的 soundness 承诺依赖编译器正确性**，使用 1.98.0 的项目应视为必须升级项。
+
+**Rust 1.99.0（2026-10-01）**稳定了 `extern "C"` 可变参数函数定义（`VaList`、`VaArgSafe`），Rust 现在可以自己实现 C ABI 的 variadic 函数，官方示例直接展示了 `unsafe extern "C" fn` 与 `// SAFETY:` 注释的配套写法；同时稳定了三个裸指针布局查询 API——`Layout::for_value_raw`、`mem::size_of_val_raw`、`mem::align_of_val_raw`，为 sized 与非 sized 类型的裸指针尺寸/对齐查询**定下安全要求**；容器与指针互转也显著扩充（`Vec::into_parts/from_parts`、`Box::into_non_null/from_non_null`），为自定义容器的 unsafe 封装提供更规范的出入口。值得注意的是 `Box::leak` 文档更新：官方**劝阻 round-trip unleaking**（leak 后再释放），理由是它与现有及未来优化、以及即将到来的自定义 allocator 稳定化存在不良交互，建议改用 `Box::into_non_null`/`into_raw`，这是一条会影响既有 unsafe 代码评审标准的文档级变化[^165^]。1.99.1 于 2026-10-15 作为点发布，按六周节奏 1.100.0 预计 2026-11-12[^166^]。
+
+**借用检查与类型系统**方面，2026-08-04 下一代借用检查器（Polonius Alpha）在 nightly 默认开启，2026-08-21 下一代 trait solver 也在 nightly 开启[^167^]。二者都属于 2026 项目目标中"Project Zero（修复已知类型系统 soundness bug）"与"稳定化"路线：Polonius Alpha 目标是解决 NLL 遗留的 Problem Case #3 并配套 a-mir-formality 形式化，新 solver 则是替换旧实现、解锁 soundness 修复与 async 特性[^168^]。对 unsafe 生态的含义是间接但重要的：类型系统层的 soundness 债正在被系统性清偿，但其夜间开启也意味着**生态需要一轮回归验证期**，不宜把 nightly 行为当作稳定承诺。
+
 ## 3. 别名模型与语义规范化前沿
 
 第 2 章的 UB 清单中，"违反指针别名规则"一条至今标注着"The exact aliasing rules are not determined yet"。本章考察这条未定性规则的两代候选模型——Stacked Borrows（SB）与 Tree Borrows（TB）——的规则差异、定案进程，以及围绕它们的语义规范化工程；截至 2026-08，这是 unsafe Rust 实践最大的中期变量。
@@ -121,11 +132,11 @@ TB 的收紧面需逐条列出，因为它直接决定旧代码的命运。第�
 
 #### 3.1.2 定案进程：Miri 旗标、UCG #573 与 #132898 悬案
 
-截至 2026-08，Miri 中 SB 仍是默认模型，TB 需以 `MIRIFLAGS=-Zmiri-tree-borrows` 显式开启；README 将两者均标注为 Experimental，并警告最终模型"很可能比 Tree Borrows 更严格"——今天被 TB 放行的代码未来可能被判 UB[^30^]；而 UCG #573 的标题本身即"以便丢弃 Stacked Borrows"，说明 SB 同样在被讨论弃用[^33^]。TB 的调节旗标族（如 `-Zmiri-tree-borrows-implicit-writes`）可视为下述参数化收敛的预演[^30^]。2025 年 TB 在 Miri 中完成两项补课：UnsafeCell 字节级追踪默认开启（PR #4314），wildcard provenance 支持使 int-to-ptr 代码也能被检查[^29^]。
+截至 2026-10（2026-10 复核，较 2026-08 无变化），Miri 中 SB 仍是默认模型，TB 需以 `MIRIFLAGS=-Zmiri-tree-borrows` 显式开启；README 将两者均标注为 Experimental，并警告最终模型"很可能比 Tree Borrows 更严格"——今天被 TB 放行的代码未来可能被判 UB[^30^]；而 UCG #573 的标题本身即"以便丢弃 Stacked Borrows"，说明 SB 同样在被讨论弃用[^33^]。TB 的调节旗标族（如 `-Zmiri-tree-borrows-implicit-writes`）可视为下述参数化收敛的预演[^30^]。2025 年 TB 在 Miri 中完成两项补课：UnsafeCell 字节级追踪默认开启（PR #4314），wildcard provenance 支持使 int-to-ptr 代码也能被检查[^29^]。
 
-官方收敛方向由 UCG #573（2025-06-09，Ralf Jung 发起）确立：不再维护两个模型，而是以 TB 为骨架收敛为"单一模型 + 一组可调参数"，逐步加回 SB 的严格性——UnsafeCell 精度一项已解决，剩余最大未知项是 `&mut` retag 的隐式写[^33^]。该未知项与 UCG #584 的 `writable` 之争直接联动：LLVM 新增的 `writable` 属性允许编译器向引用参数插入投机写（speculative writes），若推广到所有函数则"基本排除 Tree Borrows 作为别名模型"；Ralf 2025-10 表态将开 t-lang 设计会议探口风，但截至 2026-08，#573 仍 open、无正式 FCP 决议，会议纪要亦未公开[^33^][^34^]。
+官方收敛方向由 UCG #573（2025-06-09，Ralf Jung 发起）确立：不再维护两个模型，而是以 TB 为骨架收敛为"单一模型 + 一组可调参数"，逐步加回 SB 的严格性——UnsafeCell 精度一项已解决，剩余最大未知项是 `&mut` retag 的隐式写[^33^]。该未知项与 UCG #584 的 `writable` 之争直接联动：LLVM 新增的 `writable` 属性允许编译器向引用参数插入投机写（speculative writes），若推广到所有函数则"基本排除 Tree Borrows 作为别名模型"；Ralf 2025-10 表态将开 t-lang 设计会议探口风，但截至 2026-10，#573 仍 open、无正式 FCP 决议，会议纪要亦未公开；#584 本身的决议或最新讨论未核查到，状态未知[^33^][^34^][^170^]。
 
-与定案迟滞相关的是 rust-lang/rust #132898 这桩悬案：2024-11 报告，一段 SB 下合法的 two-phase borrow 代码在 `mir-opt-level=2` 下被 ReferencePropagation pass 误编译出 UB——该 pass 把一次 `SharedReadWrite` 裸指针访问重写为 Unique place 直接写，破坏了"two-phase 借用已为本次调用保留"的事实[^35^]。该 issue 标记 I-miscompile，截至 2026-08 仍 open 未修复；Ralf 指出"在 Tree Borrows 下该推理反而成立"，使此事故成为"编译器优化跑在语义规范之前"的标志性案例，也直接为 #573 的收敛提供了动机[^35^]。
+与定案迟滞相关的是 rust-lang/rust #132898 这桩悬案：2024-11 报告，一段 SB 下合法的 two-phase borrow 代码在 `mir-opt-level=2` 下被 ReferencePropagation pass 误编译出 UB——该 pass 把一次 `SharedReadWrite` 裸指针访问重写为 Unique place 直接写，破坏了"two-phase 借用已为本次调用保留"的事实[^35^]。该 issue 标记 I-miscompile，截至 2026-10 仍 open 未修复，但近期出现实质推进：社区先提交保守变体 PR #156896（凡源 place 存在其他间接借用即拒绝折叠），该 PR 已关闭（关闭日期未记录）；随后提出**精确 place-overlap gate**（仅当重叠 place 存在其他存活派生指针时拒绝），并附 rustlantis 1500 seeds 差分模糊、Crater 44 crate、tokio/spotatui 全量构建等验证记录。需要谨慎的是，这些验证记录均为**提交者自述**，维护者尚未评审，也未见独立复现；issue 讨论中另有声音称这些方案涉及 agent 辅助生成与披露争议、关闭理由偏向披露而非技术否决，但仅见于单条 issue 讨论，**低置信**[^171^]。因此应读作"修复路径正在形成（待评审）"，而非"即将合并"；Ralf 指出"在 Tree Borrows 下该推理反而成立"，使此事故成为"编译器优化跑在语义规范之前"的标志性案例，也直接为 #573 的收敛提供了动机[^35^]。
 
 #### 3.1.3 实务建议：过渡期的保守准则
 
@@ -137,7 +148,7 @@ TB 的收紧面需逐条列出，因为它直接决定旧代码的命运。第�
 
 别名模型只是 Rust 语义规范化的一块拼图。学术轨的核心是 Ralf Jung 发起的 MiniRust：一个以 specr 伪代码书写的可执行参考解释器，UB 即解释器逐步执行中遇到的非法状态；语言与内存模型通过无类型、面向字节的"内存接口"解耦，仓库内含基本内存模型与 Tree Borrows 内存模型两种实现[^36^]。MiniRust 已在反向塑造官方条文：它在两点上刻意比 Reference 少 UB（裸指针仅取地址不解引用、创建指向无效值的引用不总是 UB），由于 rustc 并未利用这些 UB，对齐属于"纯规范变更"[^36^]。2026-06，Nadrieril 发表规范愿景，提出三层架构：MiniRust 定义运行时语义（"接近成为 Rust 运行时语义的 source of truth"），其上以约 30 步的"desugaring 塔"把完整 Rust 逐层翻译到 MiniRust，再以 dictionary-passing 的 PolyMiniRust 处理泛型与 trait[^37^]。该愿景的未决问题同样坦率：规范"如何获得官方权威地位"尚无答案[^37^]。
 
-工业轨方面，Ferrous Systems 与 AdaCore 于 2025-03 将 Ferrocene Language Specification（FLS）捐赠给 Rust 项目，2025-10-31 FLS 团队正式成立、从 spec 团队分拆建制；FLS 自我定位为描述 Rust"当前实现"（as-implemented）的行为、面向安全关键认证，而非 normative 的预期行为规范[^38^]。2026 年项目目标把两条轨道并列表述：Large 目标"Stabilize FLS Release Cadence"（含发布首个 rust-lang 自有版本），以及 T-opsem 牵头的"Normative Documentation for Sound unsafe Rust"——后者若落地，将首次给 sound unsafe 代码一份官方裁决基线[^39^]。两轨是描述性（FLS）与规范性（MiniRust/T-opsem）的互补；对实践者的含义是，今天依赖"约定俗成"上游行为的 unsafe 写法，将在 normative 文档发布后被重新裁决。
+工业轨方面，Ferrous Systems 与 AdaCore 于 2025-03 将 Ferrocene Language Specification（FLS）捐赠给 Rust 项目，2025-10-31 FLS 团队正式成立、从 spec 团队分拆建制；FLS 自我定位为描述 Rust"当前实现"（as-implemented）的行为、面向安全关键认证，而非 normative 的预期行为规范[^38^]。2026 年项目目标把两条轨道并列表述：Large 目标"Stabilize FLS Release Cadence"（含发布首个 rust-lang 自有版本），以及 T-opsem 牵头的"Normative Documentation for Sound unsafe Rust"——后者若落地，将首次给 sound unsafe 代码一份官方裁决基线[^39^]。两轨是描述性（FLS）与规范性（MiniRust/T-opsem）的互补；对实践者的含义是，今天依赖"约定俗成"上游行为的 unsafe 写法，将在 normative 文档发布后被重新裁决。截至 2026-10 复核，规范化三线的状态是"目标更清晰、成果未落地"：**FLS** 仓库 README 仍明确其"不是 Rust 的 normative 规范"，未见 rust-lang 自有首版发布[^172^]；**T-opsem 的 normative unsafe 文档**（2026 目标 #644）给出了可执行方法——采用 zerocopy 模式（为每个 unsafe 块引用官方文档论证），以 Eclipse iceoryx2 约 3,300 处 unsafe 为试点，预计归纳为约 20 类模式、其中 5–7 类需要新建 normative 文档，重点覆盖跨进程同步、内存映射、跨进程原子操作与共享内存中的 `UnsafeCell`[^173^]；**SAFETY 注释**方面，《Rust Safety Standard》仍在 internals 的 Pre-RFC 讨论中，未进入正式 RFC，学术侧的 Safety Tags RFC 据论文 v2（2026-04）记录已累积 50+ commits 与 170 条评论、Rust-for-Linux 与 Bevy 表达了采用兴趣，但该数据截至 2026-04，不能证明 2026-10 仍在审阅，当前状态未核查（中低置信）[^174^][^175^]。
 
 #### 3.2.2 BorrowSanitizer：LLVM 级的别名检测新路径
 
@@ -179,7 +190,7 @@ Miri 的局限被官方明确表述为三条。其一，动态检测的路径依
 
 围绕 FFI 盲区，CMU 的 MiriLLI（Miri 与 LLVM 解释器联合执行）在 957 个调用外部函数的库的 9,130 个测试中发现 **46 处 UB 或不良行为**（37 个库；最新 v6 版口径，早期 v3 版为 48 处/38 库）；按 v3 版的构成拆解，25 处位于 LLVM/C 侧、17 处位于 Rust 侧、6 处为错误绑定；90 个 SB 违规测试中 66% 在 TB 下不再违规，成为"TB 更贴合真实 FFI 代码"的重要实证[^44^]。其工程延续是 BorrowSanitizer（BSAN）：把 Miri 的 TB 借用追踪器移植为 LLVM 编译期插桩 sanitizer（`cargo bsan`），2026-05 已向 LLVM 社区提交 upstreaming RFC 并列为 Rust 官方 2026 项目目标，目标是以接近 sanitizer 的性能覆盖多语言应用并兼容 fuzzing[^40^]。弱内存方向上，ETH 的 Miri+GenMC 集成（GenMC 无状态模型检查器枚举全部并发执行，Miri 逐条做全 UB 检查，支持 RC11 与 SC 两种内存模型）已开始上游化，但 Miri 第一作者明确其"高度实验性、慢、需定制构建"[^29^]；独立路线 RUSTMC（2025-02）则把 GenMC 直接扩展到 Rust 的 LLVM IR，可检查含 C/C++ FFI 依赖的并发程序[^45^]。
 
-在此之下是一个分层互补的工具谱系：Loom（tokio-rs）是并发排列测试的事实标准，但官方明确其"既不 sound 也不 complete"——SeqCst 被当作 AcqRel 处理（可能误报）、不探索 load buffering（可能漏报）[^46^]；AWS 的 Shuttle 则以随机调度换可扩展性[^47^]。LLVM sanitizers（ASan/TSan/MSan/LSan）经 `-Zsanitizer` 可用但仍是 nightly 不稳定特性，稳定化已在官方路线图（先 ASan/LSan，MSan/TSan 列入 2026 项目目标）[^48^]；cargo-careful 以带 debug assertions 的标准库加额外运行时检查填补"普通测试与 Miri 之间"的档，速度快且支持任意 FFI，但覆盖面小得多[^49^]。工程实践已收敛为分层 CI 范式：Microsoft oxidizer 的 PR 门禁是最完整的公开实例——Miri 以 SB/TB/strict-provenance/many-seeds 矩阵运行（"每个变体各挡一类 UB"），cargo-careful 兜底，Loom 专项并发，Bolero 限时 fuzz[^50^]；Qiskit 的规范则是"新增 unsafe 必须配 Rust 侧测试、Miri 作为 UB sanitizer 进 CI"[^51^]。
+在此之下是一个分层互补的工具谱系：Loom（tokio-rs）是并发排列测试的事实标准，但官方明确其"既不 sound 也不 complete"——SeqCst 被当作 AcqRel 处理（可能误报）、不探索 load buffering（可能漏报）[^46^]；AWS 的 Shuttle 则以随机调度换可扩展性[^47^]。LLVM sanitizers（ASan/TSan/MSan/LSan）经 `-Zsanitizer` 可用，稳定化已在官方路线图（先 ASan/LSan，MSan/TSan 列入 2026 项目目标）[^48^]；2026-10 复核进展为**渐进但未收官**：ASan/LSan 已接近稳定（总跟踪 issue 为 rust#123615，稳定化实现 PR 为 rust#123617，二者并非同一编号），并新增了默认开启 ASan 的 Tier 2 target（rust#149644）使稳定编译器可用，MSan/TSan 仍处 2026 项目目标推进中、未见稳定落地[^176^][^177^]；cargo-careful 以带 debug assertions 的标准库加额外运行时检查填补"普通测试与 Miri 之间"的档，速度快且支持任意 FFI，但覆盖面小得多[^49^]。工程实践已收敛为分层 CI 范式：Microsoft oxidizer 的 PR 门禁是最完整的公开实例——Miri 以 SB/TB/strict-provenance/many-seeds 矩阵运行（"每个变体各挡一类 UB"），cargo-careful 兜底，Loom 专项并发，Bolero 限时 fuzz[^50^]；Qiskit 的规范则是"新增 unsafe 必须配 Rust 侧测试、Miri 作为 UB sanitizer 进 CI"[^51^]。
 
 ### 4.2 Kani 与模型检查产业实践
 
@@ -193,16 +204,20 @@ Kani 是 AWS 主导的 Rust 模型检查器，也是目前产业部署最深的 
 
 verify-rust-std 战役（2024-11 AWS 与 Rust Foundation 发起）是 Kani 规模化的主要载体，但其 harness 数字存在三个不可混用的口径，本报告按交叉验证裁定分列：**16,748** 是 Autoharness 自动生成的 harness 总量（其中 11,970 个通过 Kani 支持的 UB 类别验证，4,645 个针对 unsafe 函数、1,126 个针对 unsafe 之上的安全抽象），经并行化与增量缓存 3.97x 加速后每次代码变更全量运行（CI 约 69 分钟）[^56^][^52^]；**725** 是官方论文口径的手工编写 harness（694 个带函数契约，2025-10 快照、项目前 16 个月累计；2026-10-27 已直读 [^56^] §4 核对，725 并不出现在 Kani 论文 [^52^] 中，16,748 则同见于 [^52^] Table 1 与 §5.3，另 [^56^] 载明其中 11,970 个验证通过、989 个函数带契约=295 自动+694 手工）[^56^]；**1,369** 出自第三方 safety-tags 论文的 2026-04 快照[^57^]。三者分别对应"自动生成总量 / 手工·官方时点 / 手工·第三方时点"，引用时须标注。自动化的覆盖缺口同样被量化：17,207 个被跳过的函数中，泛型单态化占 9,635 个（56%）——Autoharness 无法为未实例化的类型参数合成输入，这是最大的未验证类别[^56^]。
 
+2026-09-16 发布的 **Kani 0.68.0** 是该窗口内工具层最重磅的变化，其 Autoharness 的扩展直接命中上述最大缺口：支持**泛型函数**（含按参数与 trait impl 推导实例化、`Fn` 界类型参数用非确定闭包实例化）、裸指针参数、slice/String/Vec 参数（有界与无界）、编译器可推导 pointee 的智能指针、`--constructor-args` 构造器驱动生成，以及从类型自身断言中挖掘不变量作为值过滤器，harness 默认并行验证；同版本还新增 `#[kani::loop_decreases]`（循环终止性证明）、SARIF 输出与 `--export-json`（便于接入 GitHub Code Scanning）、`no_std` 开箱即用，工具链升至 nightly-2026-08-21、CBMC 6.11.0；0.68.0 的发布日期来自 releases 页面（页面未显示年份，据工具链日期按 2026 年理解）。同版本还修复了一批 Kani 自身 soundness 问题（求解器丢弃量词时不再静默通过、f128→i128 下界、OffsetModel 指针回绕等），与"验证器自身也要被验证"的判断一致[^178^]。**口径提醒**：Autoharness 支持泛型是工具能力落地，不等于 std 挑战中 9,635 个被跳过函数已经解决，该缺口尚未重新量化。
+
+verify-rust-std 挑战赛的统计也需分清口径。**认可工具**：2026-08 底稿记 4 个已批准工具，此后 KMIR 的 Tool Application 议题 #296 与 PR #310 均于 **2026-08-21** 合并/关闭，由审批转认可，README 现列 5 个（详见 9.2.1）[^179^]。**挑战解决数**：仓库总表现为 29 个挑战中 10 个 Resolved（#1、3、5、6、9、11、12、14、15、19），其余 19 个 Open；2025-10 论文快照记为 9 个被接受解，但两处统计口径可能不同，且总表未给出各挑战的解决日期，故**不把"9→10"当作窗口内增量**。#19 RawVec 的 VeriFast 解（PR #422）已于 2025-08-14 合并；挑战 #15（SIMD intrinsics）以 Testable Models（可执行模型的随机测试）解决，说明"证明"口径在挑战赛内部也包含模型测试路线[^179^]。
+
 **表 4-2 Rust 模型检查工具对比**（2026-08 口径）
 
 | 工具 | 前端 / IR | 求解后端 | 并发支持 | 别名（SB/TB）建模 | 产业状态 |
 |---|---|---|---|---|---|
-| Kani | MIR → GOTO [^52^] | CBMC（SAT 默认，可选 SMT） [^52^] | 不支持（告警后按顺序语义编译） [^58^] | 不建模（自认是 unsafe Rust 最主要 UB 类别的缺口） [^52^][^58^] | AWS 全职团队；Firecracker/s2n-quic/std CI；月发布 [^52^] |
+| Kani | MIR → GOTO [^52^] | CBMC（SAT 默认，可选 SMT） [^52^] | 不支持（告警后按顺序语义编译） [^58^] | 不建模（自认是 unsafe Rust 最主要 UB 类别的缺口） [^52^][^58^] | AWS 全职团队；Firecracker/s2n-quic/std CI；月发布 [^52^]；0.68（2026-09）Autoharness 支持泛型 [^178^] |
 | ESBMC（经 Goto-Transcoder） | 复用 Kani 的 GOTO 输出转 ESBMC GBF [^4^] | ESBMC（k-induction、增量 SMT、context-bounded 并发） [^4^] | 后端支持，受 Kani 前端限制 [^4^] | 不建模 [^4^] | 已进 verify-rust-std CI 与 Approved Tools；计划成为 Kani 可选后端 [^59^] |
 | RUSTMC | LLVM IR（可含 C/C++ FFI） [^45^] | GenMC（TruSt DPOR 无状态模型检查） [^45^] | 完备枚举（无界循环除外） [^45^] | 不建模 | 学术原型（RHUL，2025-02） [^45^] |
 | Miri+GenMC | MIR（Miri 作 GenMC 解释前端） [^29^] | GenMC（RC11/SC 内存模型） [^29^] | 完备枚举 [^29^] | 继承 Miri 全部 UB 检查（含 SB/TB） [^29^] | 高度实验性，需定制构建，上游化进行中 [^29^] |
 
-对比可见当前格局的两个结构性特征。其一，Kani 生态走的是"位精确有界模型检查 + 契约阶梯"路线，在顺序代码的功能与安全属性上证据最强，但别名与并发是其自认的两个最深缺口：Kani 官方文档明示不检测数据竞争、不跟踪引用生命周期（即不建模 SB/TB 别名规则）、transmute 非法值只做 best-effort，遇并发代码告警后按顺序语义编译[^58^]；verify-rust-std 中要求证明无数据竞争的挑战 #7（原子类型）与 #27（Arc）截至 2026-08 均仍 Open[^4^]。其二，并发模型检查的三条路线（ESBMC 后端复用、RUSTMC 的 LLVM IR 路线、Miri+GenMC 的 MIR 路线）均未达到生产可用，这意味着"Miri 管别名、Kani 管功能属性"的互补分工在中期内仍是从业者的实际基线——任何"已验证"声明都应附保证清单，其语义天花板是"无 panic/无越界/契约成立"，而非"无 UB"。
+对比可见当前格局的两个结构性特征。其一，Kani 生态走的是"位精确有界模型检查 + 契约阶梯"路线，在顺序代码的功能与安全属性上证据最强，但别名与并发是其自认的两个最深缺口：Kani 官方文档明示不检测数据竞争、不跟踪引用生命周期（即不建模 SB/TB 别名规则）、transmute 非法值只做 best-effort，遇并发代码告警后按顺序语义编译[^58^]；verify-rust-std 中要求证明无数据竞争的挑战 #7（原子类型）与 #27（Arc）截至 2026-10-27 均仍 Open[^4^][^179^]。其二，并发模型检查的三条路线（ESBMC 后端复用、RUSTMC 的 LLVM IR 路线、Miri+GenMC 的 MIR 路线）均未达到生产可用，这意味着"Miri 管别名、Kani 管功能属性"的互补分工在中期内仍是从业者的实际基线——任何"已验证"声明都应附保证清单，其语义天花板是"无 panic/无越界/契约成立"，而非"无 UB"。
 
 ESBMC 的接入路径值得单独记录：它不经 Rust 前端，而是由 Goto-Transcoder（一个形式化统一 CPROVER 工具链内部表示的博士项目）把 Kani 输出的 CBMC GBF 转为 ESBMC GBF，从而引入 k-induction 与增量 SMT 求解；该工作流已在 verify-rust-std CI 上线、列入官方 Approved Tools 并获挑战赛奖金，官方计划是使其成为 Kani 的可选后端，与 Kani 里程碑中"新增一种模型检查引擎"的路线图互为印证[^59^][^4^]。截至 2025-10，goto-transcoder 尚未独立解决任何挑战，其意义目前更多在于验证后端多元化而非能力增量[^4^]。
 
@@ -232,6 +247,8 @@ ESBMC 的接入路径值得单独记录：它不经 Rust 前端，而是由 Goto
 
 横向读表可得三条结构性判断。其一，在这六个样本中，unsafe 支持与自动化程度大体呈负相关（仅为六样本的归纳，Aeneas 即反例：unsafe 支持缺失而自动化程度同样低）：最"unsafe-native"的 VeriFast 注解成本最高，最自动化的 Flux 恰恰不能推理指针写入，Verus 以"用 proof-oriented 类型重写代码"换取中间点——std 挑战中 VeriFast 已解链表题而 Verus 尚在审批队列，正是这一取舍的工程后果。其二，六者维护全部活跃（最近 push 均在 2026-05 至 2026-08），与 5.2 节第一代学术 bug finder 的集体老化形成鲜明对照。其三，std 挑战赛正成为事实上的能力校准器：宣传定位与实际解题之间存在可观察的差距（Flux 在 CI 而零解、Verus 系统案例成熟而审批未过），选型应以解题记录而非论文声明为准。
 
+2026-10 复核的维护动态：Prusti 的正式 release 仍停留在 2024-03，但 nightly 构建持续（2026-10-23 仍有 nightly release）[^180^]；Verus、Creusot 保持滚动发布节奏（第三方资料分别提及 2026.08.30 滚动版与 v0.13.0，按中置信记录，不作核心结论）。
+
 #### 5.1.2 选型决策框架
 
 沿 unsafe 支持度、自动化程度、学习曲线、维护状态四个轴，给出分层建议。**新项目、以 safe 代码为主**：从 Clippy lint 基线（5.2.2 节）起步，轻量安全属性与数值界用 Flux（学习曲线最平缓、循环不变量零注解）[^68^]，深度功能正确性再升级至 Prusti 或 Creusot。**含 unsafe 的库**：直接注解真实 unsafe 源码选 VeriFast，能接受以 proof-oriented 类型重写且需并发支持选 Verus；两者都应与 Miri 互补而非替代[^65^][^66^]。**安全关键组件（密码学、认证场景）**：Aeneas→Lean 4 管道提供最强的 foundational 保证，SymCrypt 案例给出可复用范式，但须为约 10 倍于代码量的证明劳动做预算[^70^]。**供应链治理**：演绎验证不解决"信任上游"问题，转向 5.3 节审计工具栈。跨场景通用判据：优先选择已进 verify-rust-std CI 或有解题记录的工具，并把"是否锁定 nightly、维护方是学术团队还是产业实体"作为与能力同权的指标。
@@ -254,7 +271,7 @@ Clippy/rustc lint 体系已成 unsafe 卫生基线。截至 2026-08 抓取的官
 
 **cargo-geiger** 统计 crate 及其传递依赖中 `unsafe` 关键字使用量，以 🔒/❓/☢️ 三符号标记；其 README 明示该工具"不直接判断代码是否真正不安全"，定位是为人工审计提供统计输入[^84^]。两类误读被社区反复纠正：把高 unsafe 计数当作"有漏洞"，以及把"全 safe 徽章"当作可信证明——kornelski 在官方 Discussion 中指出，恶意代码可经 proc-macro、build.rs 等通道绕开 unsafe 关键字，甚至刻意避开 unsafe 以骗取徽章，"safety ≠ security"[^84^]。正确用法是把输出当审计分诊地图（triage map），且其语法扫描口径本身存在宏展开计数不准等已知缺陷[^84^]。
 
-**cargo-audit + RustSec Advisory Database** 是依赖漏洞扫描基线。RustSec 把无已知利用路径的 soundness 缺陷制度化为一等信息级公告（`informational = "unsound"`），cargo-audit 可用 `--deny unsound` 升级为 CI 失败[^85^]。MSR 2026 的 RustXec 数据集论文给出统计：2021-01 至 2025-04 共收集 515 条 RustSec 公告条目，其中标注为 unmaintained 117 条、unsound 89 条、重复 10 条，剔除这 216 条后余 299 条（515−216=299，与论文原文逐项对得上）——即 515 已包含 unsound 与 unmaintained 两类，unsound 类占 89/515≈17.3%（2026-10-27 已对论文原文核对；此前 89/721≈12% 的并列口径以 515+89+117 为分母属误算，已删除）[^86^]；2025–2026 年 "Unsoundness in …" 条目明显加速，anyhow、cxx、lru 等顶级 crate 亦在其列，说明主流库的 soundness 公告是持续性产出，审计不是一次性工作[^85^]。
+**cargo-audit + RustSec Advisory Database** 是依赖漏洞扫描基线。RustSec 把无已知利用路径的 soundness 缺陷制度化为一等信息级公告（`informational = "unsound"`），cargo-audit 可用 `--deny unsound` 升级为 CI 失败[^85^]。MSR 2026 的 RustXec 数据集论文给出统计：2021-01 至 2025-04 共收集 515 条 RustSec 公告条目，其中标注为 unmaintained 117 条、unsound 89 条、重复 10 条，剔除这 216 条后余 299 条（515−216=299，与论文原文逐项对得上）——即 515 已包含 unsound 与 unmaintained 两类，unsound 类占 89/515≈17.3%（2026-10-27 已对论文原文核对；此前 89/721≈12% 的并列口径以 515+89+117 为分母属误算，已删除）[^86^]；2025–2026 年 "Unsoundness in …" 条目明显加速，anyhow、cxx、lru 等顶级 crate 亦在其列，说明主流库的 soundness 公告是持续性产出，审计不是一次性工作[^85^]；2026-08 至 10 月窗口内这一趋势延续，且头部 crate（tokio、rustls、zstd、libcrux）也无法免疫（样本见 8.3.3）。
 
 #### 5.3.2 cargo-vet 机构互导网络 vs cargo-crev；实证缺口与 AI 入场
 
@@ -272,6 +289,16 @@ Clippy/rustc lint 体系已成 unsafe 卫生基线。截至 2026-08 抓取的官
 | AI 审计工具 | 审计工作流封装 | LLM skill/agentic harness+Miri/fuzz 裁决 | Trail of Bits rust-review（2026-01）；草根 skill 质量未经独立验证 [^90^] | 新兴（2025–2026），待核实 [^90^] |
 
 纵向读表，分层与断层同样清晰。基线层（audit/deny）采用率最高，是任何项目的最低配置；盘点层（geiger）语义误读风险最大，其价值取决于使用者是否理解"计数≠风险"；记录层呈现 vet 与 crev 的鲜明对照——机构级直接信任（9 家互导、可量化的导入杠杆）跑通了网络效应，个人 WoT 则未能形成网络效应（归因于密钥与信任图的维护摩擦，仅见博客评论、属推断而非实证[^92^]），这与 CRA 等机构合规时代"审计责任主体是组织"的粒度一致。断层在中段：vet 使用率仅 7% 与 88% 受访者审计不足互为印证，瓶颈不在工具供给而在审计劳动供给；Cargo Scan 的 0.2% 中位数审计面与 AI 工具的"Miri/fuzz 裁决"范式是 2026 年针对这一瓶颈的两条最有前景的回应，但前者仍是研究原型、后者可靠性未经独立验证，短期内人工审计不可绕过。
+
+#### 5.3.3 2026-08 至 10 月：供应链与工具链事件
+
+窗口内三起官方安全事件值得单独列为**供应链与工具链风险**：
+
+1. **arrayref 投毒（2026-08-20）**：`proc-macro1` 等 6 个恶意 crate 通过 build script 下载恶意载荷；热门 crate `arrayref` 被重新发布并依赖恶意包，`arrayref@0.3.10` 在线 86 分钟即被删除，`internment@0.8.7`、`append-only-vec@0.1.9` 分别在线 90、107 分钟。官方判断作者本人无恶意，其设备或凭据疑似被控制，Nextron Systems 首先报告[^190^]。
+2. **针对维护者的定向社会工程（2026-09-17）**：crates.io 团队与安全响应组警告，攻击者以求职/合作视频面试为诱饵，诱导 rust-lang 成员与热门 crate 所有者安装"缺失的音频编解码器"或执行剪贴板中的命令，目的是接管设备与账号以发布恶意包；官方指出 arrayref 事件走了相似路径，攻击手法符合 DPRK 已知 tradecraft 但未作归因[^191^]。
+3. **Miri 环境变量经 CI 缓存泄漏（2026-09-21）**：Miri 为多次调用保留构建相关环境变量，实现上把**全部环境变量写入 `target/`**；若 GitHub Actions 缓存 `target/` 且 job 暴露 secrets，PR 可经缓存读取。2026-09-22 nightly 起 Miri 只保留 `CARGO_*`（不含 token）与 `OUT_DIR`；官方生态扫描发现 1 个仓库存在该问题、7 个需警惕，OpenAI 报告并赞助扫描[^192^]。
+
+这三件事共同说明：**"Rust 安全"不等于"Rust 工程链路安全"**。依赖冷却期（推迟数天升级）、`cargo audit`（仅能事后拦截已公告漏洞，对恶意包公告前的窗口无效）、CI 缓存与 secrets 隔离、维护者 MFA 与面试流程核验，应进入与 unsafe 审计同级的检查清单（见 8.3.2）。
 
 ## 6. 内核与系统级实践
 
@@ -298,9 +325,11 @@ unsafe 治理的制度核心是三层架构：safe 叶子驱动 → `rust/kernel
 
 表中约一个数量级的反差与该架构设计相符（AGX 驱动自身 0.76% 对其 kernel crate 分支约 9.7%，约 12 倍；NVMe 与 Binder 的差距更小）：三个驱动自身 unsafe 占比均不高于 3.4%，而共享的 kernel crate 约为 9.2%–9.7%——unsafe 并未消失，而是集中到可集中审计的 kernel crate。需注意，三个分支的 kernel crate 规模并不相同（7,179、9,116、9,428 行），表明该表面随分支与驱动需求而增长，"固定大小、不随驱动数量增长"无法由此表支持。Binder 占比偏高主要源于其需对接仍为 C 实现的 binderfs。需注意口径边界：该数据为 2024 年论文快照，统计的是 unsafe 块行数而非风险权重；Google 报告的 Android 平台"约 4% 代码位于 unsafe 块内"是另一口径，不可混用[^2^]。论文同时批评安全契约仅以非正式注释记录、未使用形式化规约语言——这正是上述 Pre-RFC 与验证工具介入的切口。
 
+2026-08 至 10 月内核侧的节奏没有放缓。Linux 7.3 合并窗口中，DRM 的 Rust core 基础设施继续完善，两个旗舰 Rust DRM 驱动同步推进：**Nova** 增加 vGPU 启动支持、TLV 固件格式支持并改进 Hopper/Blackwell 代码，**Tyr**（Arm Mali）持续上游化（Tyr 此前已合入 6.18，背景见[^182^]）[^181^]。Kangrejos/LPC 2026 的 LWN 系列议题显示，讨论重心正从"能否用 Rust"转向**更深层的抽象与互操作**：用 Charon 分析 Rust 程序（10-07）、从 Rust 拥有 C 类型（10-13）、内核 Rust 的安全自引用数据结构（10-16）、跨 crate 前向声明（10-19）、XArray 重写讨论（10-20）以及 Rust 未来特性（10-22）[^183^]。
+
 #### 6.1.2 路线图：稳定化清零与 GCC 侧双轨
 
-LPC 2025（2025-12）公布的 2026 年预期包括（截至 2026-08 底稿未跟踪其兑现情况）：内核不再使用任何 unstable 语言特性（当前仅剩 arbitrary_self_types 与 derive_coerce_pointee 两个，且仅其一允许全局使用）；推进 field projections 等新特性（已成独立 Rust project goal）；rustc_codegen_gcc 进入 Rust CI 并构建 Rust for Linux；gccrs 首次构建 kernel crate 与内核模块[^95^]。gccrs 已把"Rust for Linux compiler"列为三大里程碑之一，其内核议题已被 RustConf 2026 接受；月报特别强调 Drop 语义对内核的关键性（互斥锁等类型的 Drop 含复杂副作用）[^100^]。主线工具链基线为 Rust 1.85.0 + bindgen 0.71.1，下限策略跟随 Debian stable[^95^]。
+LPC 2025（2025-12）公布的 2026 年预期包括（除 gccrs 一项外，截至 2026-10 未逐项跟踪其兑现情况）：内核不再使用任何 unstable 语言特性（当前仅剩 arbitrary_self_types 与 derive_coerce_pointee 两个，且仅其一允许全局使用）；推进 field projections 等新特性（已成独立 Rust project goal）；rustc_codegen_gcc 进入 Rust CI 并构建 Rust for Linux；gccrs 首次构建 kernel crate 与内核模块[^95^]。gccrs 已把"Rust for Linux compiler"列为三大里程碑之一，其内核议题已被 RustConf 2026 接受；月报特别强调 Drop 语义对内核的关键性（互斥锁等类型的 Drop 含复杂副作用）[^100^]。**但"2026 年 gccrs 首次构建 kernel crate"的预期在 2026-10 尚未兑现**（以下主要依据 2026-09-22 的单一 LWN 报道，中置信）：RustConf 2026 与 Kangrejos 的演讲明确，gccrs 目前仍不能编译 Linux 内核，团队把阶段目标戏称为"先 miscompile 内核"——先无报错接受代码并产出可测试二进制，再验证行为等价；积极进展是名称解析与声明宏展开已完成（历时约三年），core 编译时间经缓存从 42 分钟降至 3 分钟（rustc 约 30 秒），过程宏需要 std 的问题正在讨论"先用 rustc 编译 proc-macro"的过渡方案；据该报道，两名核心开发者曾被解雇、无法全职投入，其合同已由 Open Source Security 接手（LWN 未提及雇主名称）[^184^]。主线工具链基线为 Rust 1.85.0 + bindgen 0.71.1，下限策略跟随 Debian stable[^95^]。
 
 ### 6.2 CVE-2025-68260 深度复盘
 
@@ -336,7 +365,7 @@ for n in local_list.iter() { ... }  // 放锁后元素 prev/next 仍活跃
 
 2022 年 11 月至 2026 年 9 月，内存安全从机构倡议演进为多法域合规信号，且链条上每一环均可核实至一手出处。美国联邦侧的起点是美国国家安全局（National Security Agency, NSA）2022 年 11 月 10 日发布的网络安全信息单《Software Memory Safety》，首次以联邦政府名义点名六种内存安全语言（memory safe language, MSL）：C#、Go、Java、Ruby、Rust、Swift——**原始名单不含 Python**，此为二手文献中最常见的误记；Python 首次出现在 2023 年 12 月路线图指南的推荐列表中[^108^]。2023 年 12 月 6 日，美国网络安全与基础设施安全局（Cybersecurity and Infrastructure Security Agency, CISA）联合五眼联盟 8 家机构（美 CISA/NSA/FBI、澳 ACSC、加 CCCS、英 NCSC-UK、新 NCSC-NZ/CERT-NZ，**不含德国**）发布《The Case for Memory Safe Roadmaps》，确立"内存安全路线图"（含分阶段日期、新系统采用 MSL 的日期、外部依赖计划等要素）作为政策抓手[^109^]。2024 年 2 月 26 日，白宫国家网络总监办公室（ONCD）发布 19 页技术报告《Back to the Building Blocks》，将 C/C++ 定性为内存不安全的国家安全风险并点名 Rust 为安全语言示例（原始 whitehouse.gov 链接已失效，引用须用 bidenwhitehouse.archives.gov 归档地址）[^110^]。
 
-最具约束力色彩的文件是 CISA 与 FBI 的《Product Security Bad Practices》：2024 年 10 月 16 日草案将"以内存不安全语言开发关键基础设施新产品线"与"2026 年 1 月 1 日前未公布路线图"列为危险不良实践[^111^]；但 2025 年 1 月 17 日定稿**删除了"by January 1, 2026"的硬性日期**，软化为"2025 年底前发布路线图"，并明示文件 non-binding。截至 2026 年 8 月，CISA 未有任何执法、点名或更新版本，其实际传导落在联邦采购与产品责任诉讼的"注意义务"上[^112^]。2025 年 6 月 23 日 NSA/CISA 联合指南《Memory Safe Languages: Reducing Vulnerabilities in Modern Software Development》完成从"为什么"到"怎么做"的转向，并贡献了权威数据点（见 7.2 节）[^7^]。欧洲侧，欧盟《网络弹性法案》（Cyber Resilience Act, CRA，Regulation (EU) 2024/2847）虽技术中立、不指定语言，但其第 14 条报告义务（24 小时预警→72 小时通知→14 天/1 个月终报，罚款上限 1500 万欧元或全球营业额 2.5%）于 **2026 年 9 月 11 日**起适用，以 2026-08 锚点计约 6 周后到期（本文成稿时尚未适用），是当时最迫近的合规事件[^8^][^113^]。另据单一二手来源（corrode.dev，Rust 咨询商，有立场）报道，德国联邦信息安全办公室（BSI）在 NIS-2 安全措施指南中点名 Rust，但一手文档尚未定位，**置信度低，待核实**[^114^]。
+最具约束力色彩的文件是 CISA 与 FBI 的《Product Security Bad Practices》：2024 年 10 月 16 日草案将"以内存不安全语言开发关键基础设施新产品线"与"2026 年 1 月 1 日前未公布路线图"列为危险不良实践[^111^]；但 2025 年 1 月 17 日定稿**删除了"by January 1, 2026"的硬性日期**，软化为"2025 年底前发布路线图"，并明示文件 non-binding。截至 2026 年 10 月，CISA 未有任何执法、点名或更新版本（2026-10-27 核查 CISA 内存安全语言指南页的相关资源栏与新闻列表首页，及网络检索，未发现窗口内新的内存安全专项指南；NSA 新闻稿页返回 403 未能核查，CISA 新闻列表未覆盖 8 月，故非穷尽核查）[^187^]，其实际传导落在联邦采购与产品责任诉讼的"注意义务"上[^112^]。2025 年 6 月 24 日 NSA/CISA 联合指南《Memory Safe Languages: Reducing Vulnerabilities in Modern Software Development》完成从"为什么"到"怎么做"的转向，并贡献了权威数据点（见 7.2 节）[^7^]。欧洲侧，欧盟《网络弹性法案》（Cyber Resilience Act, CRA，Regulation (EU) 2024/2847）虽技术中立、不指定语言，但其第 14 条报告义务（24 小时预警→72 小时通知→14 天/1 个月终报，罚款上限 1500 万欧元或全球营业额 2.5%）已于 **2026 年 9 月 11 日**起适用（主要义务仍在 2027-12-11），这会持续把漏洞披露、SBOM 与依赖审计变成合规动作[^8^][^113^][^186^]。另据单一二手来源（corrode.dev，Rust 咨询商，有立场）报道，德国联邦信息安全办公室（BSI）在 NIS-2 安全措施指南中点名 Rust，但一手文档尚未定位，**置信度低，待核实**[^114^]。
 
 | 日期 | 机构 | 文件 | 关键要求/内容 |
 |---|---|---|---|
@@ -351,7 +380,7 @@ for n in local_list.iter() { ... }  // 放锁后元素 prev/next 仍活跃
 
 #### 7.1.2 DARPA TRACTOR 与认证体系
 
-国防高级研究计划局（DARPA）的 TRACTOR（TRanslating All C TO Rust）项目以 AI 加程序分析自动将 C 译为地道 Rust，测试评估由 MIT 林肯实验室承担并每六个月发布公开基准；2025 年 7 月，UIUC/UW-Madison/UC Berkeley/爱丁堡大学联合团队的 ForCLift 项目获 500 万美元资助，此为已核实的一手事实[^115^][^116^]。但广泛流传的"2026 年初对 MISRA C 合规代码达 95% 自动化、输出 unsafe 占比 <5%"指标**仅见于 IDST 一家非官方防务媒体，DARPA 与 MIT LL 一手材料中均未检出，置信度低，引用须标注为第三方报道**[^117^]。认证侧，Ferrous Systems 的 Ferrocene 是首个 TÜV SÜD 合格的 Rust 工具链（ISO 26262 ASIL D、IEC 61508 SIL 3——SIL 4 为进行中口径、IEC 62304 Class C），2025 年 12 月认证范围扩展至 core 库子集（IEC 61508 SIL 2）；其催生的 Ferrocene Language Specification（FLS）于 2025 年 3 月捐赠给 Rust 项目，仅部分缓解了"Rust 无语言规范"的合规障碍（FLS 是描述当前实现的 as-implemented 文档，并非规范性语言规范）[^118^][^6^]。
+国防高级研究计划局（DARPA）的 TRACTOR（TRanslating All C TO Rust）项目以 AI 加程序分析自动将 C 译为地道 Rust，测试评估由 MIT 林肯实验室承担并每六个月发布公开基准；2025 年 7 月，UIUC/UW-Madison/UC Berkeley/爱丁堡大学联合团队的 ForCLift 项目获 500 万美元资助，此为已核实的一手事实[^115^][^116^]。2026-10-28 复核官方 DARPA-TRACTOR-Program/Reports 仓库：其中已有 First_TRACTOR_Evaluation_Report.pdf（提交记录显示 2026-02-20 上传、2026-10-26 提交"Updated first evaluation report"）与 Second_TRACTOR_Evaluation_Report.pdf（2026-10-26 提交"Release second evaluation report"，属 2026-08 之后新增），MIT LL 页面亦链接 Round 1 报告；两份 PDF 的正文与结论未能读取，故其内容不作结论，仅确认报告存在与发布日期；参评方包括 aarno、galois、harvest、intel、uwisc、yale 等团队（低置信）[^187^][^188^]。但广泛流传的"2026 年初对 MISRA C 合规代码达 95% 自动化、输出 unsafe 占比 <5%"指标**仅见于 IDST 一家非官方防务媒体，DARPA 与 MIT LL 一手材料中均未检出，置信度低，引用须标注为第三方报道**[^117^]。认证侧，Ferrous Systems 的 Ferrocene 是首个 TÜV SÜD 合格的 Rust 工具链（ISO 26262 ASIL D、IEC 61508 SIL 3——SIL 4 为进行中口径、IEC 62304 Class C），2025 年 12 月认证范围扩展至 core 库子集（IEC 61508 SIL 2）；Ferrocene 26.08.0（2026-10-16 发布）纳入 Rust 1.96/1.97，并新增 `armv7r-none-eabihf`（Armv7-R 硬浮点裸机）、`aarch64-unknown-qnx` 与 `x86_64-pc-qnx`（QNX SDP 8.0+）三个安全认证目标，认证口径保持为编译器 ISO 26262 ASIL D / IEC 61508 SIL 3 / IEC 62304 Class C，core 子集 SIL 2 / ASIL B，SIL 4 与 DO-178C DAL C 为支持客户认证方向[^189^]；其催生的 Ferrocene Language Specification（FLS）于 2025 年 3 月捐赠给 Rust 项目，仅部分缓解了"Rust 无语言规范"的合规障碍（FLS 是描述当前实现的 as-implemented 文档，并非规范性语言规范）[^118^][^6^]。
 
 ### 7.2 产业实证数据
 
@@ -362,6 +391,8 @@ for n in local_list.iter() { ... }  // 放锁后元素 prev/next 仍活跃
 #### 7.2.2 基础设施迁移与审计需求传导
 
 操作系统供应链层面，Ubuntu 25.10（2025-10-09）成为首个默认搭载 sudo-rs 与 Rust 版 coreutils（uutils）的主流发行版，Ubuntu 26.04 LTS 延续该路线[^119^]；Debian APT 维护者宣布**不早于 2026 年 5 月**引入硬 Rust 依赖（.deb/.ar/.tar 解析与 Sequoia 签名验证），无 Rust 工具链的架构 ports 须在期限内补齐或退役（截至 2026-08 底稿未见该时点之后的更新，实际落地情况待核实）[^120^]。以下为本报告的推断，非来源原文：CRA 的 24 小时报告时限可能要求组件级可见性，从而间接抬升对 unsafe/FFI 边界清单的需求，但 CRA 技术中立，未见文本要求 unsafe 清单；谷歌的密度数据与 near-miss 解剖（样本有限）提示残余风险可能集中在 unsafe 块与 FFI 边界。据此推断，unsafe 的清单化、审计与形式化验证的需求可能上升，但尚无政策文件直接要求。
+
+产业侧在 2026-09 出现了标志性事件：**微软自述将 Rust 列为内部 Tier-1 语言**（2026-09-10，Rust Foundation 客座文章，厂商自述、单一来源，中低置信），与 C++、C#、TypeScript 同级，意味着安全工具链、开发者工具、质量流程、平台集成与 SDL 合规的完整"铺路"。技术核心是 **rustc_codegen_utc**——把 rustc 接到 MSVC 后端，使 Rust/C++ 共享 Windows 平台的加固、热补丁、跨语言内联与调试体系；该后端 2026 年初生产可用、自 Rust 1.90 起自托管，已有 100+ 微软仓库使用[^185^]。加上 Linux 内核"实验结束"与 Android 出货（见 6.1.1、7.2.1），Rust 在这些大型工程体系中正从"可选项"走向常规选项；但微软一例仅有厂商自述，Linux 内核也不是平台厂商，不宜据此并称"两大平台厂商默认"。
 
 ## 8. 最佳实践体系
 
@@ -417,6 +448,8 @@ panic safety 的最低义务是：unsafe 代码中 panic 不得违反内存安�
 
 手写 `unsafe impl Send/Sync` 已有成熟决策树：(1) 优先让类型由已具正确 auto trait 的字段自动派生——裸指针 `!Send`/`!Sync` 是有意的 lint 式设计，逼你封装；(2) `Send` 判据：值能跨线程移动且能在他线程 drop（含跨线程 `free` 合法性）；(3) `Sync` 判据：无法通过 `&T` 非同步地得到可变访问，若存在公开 `Deref<Target = T>` 路径则 `Container<T>: Sync` 需要 `T: Sync`；(4) 锁能把值跨线程"运送"，故 `unsafe impl<T> Sync for SpinLock<T> where T: Send`（Mara Bos 经典边界）；(5) guard 类型常需刻意 `!Send`（std `MutexGuard`：底层锁要求同线程解锁）；(6) 可写 `where Box<T>: Send` 直接继承 std 语义[^139^][^140^]。RustSec 数据库中 Send/Sync 边界缺失或过宽是最高频的 unsound 类别（aovec、im、concread、futures-util 等一串公告），故该决策树应按条目逐一核对而非凭直觉[^85^]。transmute 使用前须核对四重陷阱：两侧 size 相等（泛型下编译器检查易漏）、默认 `repr(Rust)` 布局无保证（跨类型 transmute 一般要求 `repr(C)`/`repr(transparent)`）、目标类型每个位模式都须合法、能写指针 cast 就别 transmute——每一点都对应上表中 clippy 的专项 lint，工程上等价于"把 transmute 族 lint 设为 deny 并逐条处置"[^128^]。
 
+2026-08 至 10 月的 RustSec 公告为这条最低义务提供了成批的外部验证：窗口内出现一大批**元素或谓词的 `Drop` panic 导致 double free / use-after-free** 的公告，包括 `owned-alloc`（0291）、`imbl-sized-chunks`（0292）、`ringbuf`（0293）、`rtrb`（0274）、`unicycle`（0298）、`skiplist`（0300）、`stack_collections`（0301）、`aligned_box`（0282）、`stable-vec`（0267）、`sp-sized-chunks`（0254）、`circular-buffer`（0256）、`stack_dst`（0272）等[^195^]，另有 `lru`（0253，`LruCache::pop` 缺 panic safety）与 `orx-split-vec`（0252，未初始化读）等同类问题[^196^]。**在元素可能被析构的容器操作里，先恢复不变量再允许 panic 传播**（RAII guard/Hole 模式）不是风格建议，而是这批事故反复验证的硬约束；对审计者而言，应把"Drop panic 路径"列为含 unsafe 依赖的固定审查项。
+
 ### 8.3 反面案例与审计清单
 
 #### 8.3.1 经典事故复盘
@@ -441,7 +474,21 @@ panic safety 的最低义务是：unsafe 代码中 panic 不得违反内存安�
 
 审计供给的现状并不乐观：IEEE S&P 2024 对 160 名用过 unsafe 的开发者（问卷调查）的调查显示，**88% 的受访者审计其依赖项 unsafe 使用的频率不足一半**，仅 51% 用过自动化审计工具（cargo-audit 63%、cargo-geiger 22%、cargo-vet 仅 7%），仅 23% 始终确信自己的 unsafe 封装是 sound 的[^9^]。方法论侧的突破来自两项 2026 年工作。其一是 Cargo Scan（ESOP 2026）：用副作用（effect）分析跨 crate 追踪潜在危险操作，审计 hyper 及其全部 30 个依赖（约 16 万行）时人工审阅面压至**中位数 0.2% 代码行**，top-10K crates 中 3,434 个可自动判为"pure"；该研究同时指出 `#![forbid(unsafe_code)]` 的信任幻觉——axum 宣称 100% safe，但其依赖的 hyper 传递树中确有 unsafe[^89^]。其二是 safety-tag 方法论（arXiv:2504.21312）：把 SAFETY 注释翻译为 21 个机器可检查的安全标签（layout、pointer validity、content、alias、contextual 五类，覆盖 96.1% 的公开 unsafe API），审计任务即沿调用链检查每条义务是被内部检查消解还是被正确标注移交调用方；对标准库的实证审计发现 27 个 API 的 61 处文档缺陷，修复已全部被官方合并[^57^]。
 
-综合 ANSSI checklist 与 Rust Secure Code WG 供应链指南，含 unsafe 依赖的审计可按七步 SOP 执行：①锁定版本，审 `Cargo.lock` diff，并以 crates.io 发布 tarball（而非仓库源码）为审阅对象——两者可能分叉，且**仅在 IDE 中打开不可信 crate 即可经 proc-macro 执行任意代码**，应使用纯文本编辑器或受限模式[^144^][^145^]；②cargo-audit/cargo-deny 过已知公告，`--deny unsound` 把信息级 unsound 公告升级为 CI 失败[^145^]；③用 cargo-geiger 或 Cargo Scan 圈定 unsafe 分布作为审计分诊地图——geiger 输出是统计输入而非风险评分[^84^]；④逐 unsafe 块核对 SAFETY 注释四要素，可按 21 标签法分类检查义务的消解或移交[^57^]；⑤build.rs、proc-macro、FFI 边界按可执行代码最高信任级审；⑥以 Miri（含 `cargo careful` 中间档）、loom、fuzz 做动态兜底[^49^][^46^]；⑦审计结论固化为 cargo-vet 记录或内部豁免清单，使下次依赖升级只审增量。这套流程把"审 unsafe 依赖"从一次性的通读劳动，转变为可增量、可委托、可机器辅助的常态工序。
+综合 ANSSI checklist 与 Rust Secure Code WG 供应链指南，含 unsafe 依赖的审计可按七步 SOP 执行：①锁定版本，审 `Cargo.lock` diff，并以 crates.io 发布 tarball（而非仓库源码）为审阅对象——两者可能分叉，且**仅在 IDE 中打开不可信 crate 即可经 proc-macro 执行任意代码**，应使用纯文本编辑器或受限模式[^144^][^145^]；②cargo-audit/cargo-deny 过已知公告，`--deny unsound` 把信息级 unsound 公告升级为 CI 失败[^145^]；③用 cargo-geiger 或 Cargo Scan 圈定 unsafe 分布作为审计分诊地图——geiger 输出是统计输入而非风险评分[^84^]；④逐 unsafe 块核对 SAFETY 注释四要素，可按 21 标签法分类检查义务的消解或移交[^57^]；⑤build.rs、proc-macro、FFI 边界按可执行代码最高信任级审；⑥以 Miri（含 `cargo careful` 中间档）、loom、fuzz 做动态兜底[^49^][^46^]；⑦审计结论固化为 cargo-vet 记录或内部豁免清单，使下次依赖升级只审增量。这套流程把"审 unsafe 依赖"从一次性的通读劳动，转变为可增量、可委托、可机器辅助的常态工序。2026-08 至 10 月的三起工具链事件（5.3.3）提示在上述七步之外补两条：⑧依赖升级设冷却期（推迟数天）并审锁文件——`cargo audit` 只能事后拦截已公告漏洞，对 arrayref 这类 86 分钟即被下线的恶意包无效；⑨CI 中能写公共缓存的 job 不接触 secrets，运行 `cargo miri` 且缓存 `target/` 的项目应禁用该 job 缓存或隔离 secrets 并清空旧缓存，维护者核验 MFA、登录历史与面试邀约真实性[^190^][^191^][^192^]。
+
+#### 8.3.3 2026-08 至 10 月新增事故与公告样本
+
+**tokio 两条公告，两类失败。** RUSTSEC-2026-0384（2026-10-22）：Tokio v1.54.0 在多线程运行时中，`Interval::poll_tick` 与时间驱动存在竞态，可在 safe Rust 中造成 waker 与任务状态的数据竞争和 use-after-free，表现为断言 panic、任务引用计数损坏或堆破坏；因已导致生产崩溃，**1.54.0 被 yank**，修复版本 ≥1.54.1（CVE-2026-115567，仅影响 1.54.0，`Sleep`/`Timeout` 不受影响）[^193^]。RUSTSEC-2026-0386（2026-10-23，影响 1.51/1.53/1.54 多条版本线）：`AsyncFd::new` 等**安全构造器**接受任意 `T: AsRawFd`，无法保证 fd 所有权与有效性；fd 被复制、关闭并被 OS 复用后，析构会错误注销并释放他者资源，形成 use-after-free。修复方式不是"把检查做得更好"，而是**自 1.51.6/1.53.3/1.54.0 起弃用这些安全构造器，改用 `unsafe` 的 `register`/`register_with_interest`**，把"fd 在 AsyncFd 存活期间保持有效、打开且不被替换"的义务交还调用方[^194^]。其中 0386 是 2.1 节与 8.1 节关于"`unsafe fn`/`unsafe trait` 创设证明义务"讨论的反向教材：**当不变量无法由类型与文档低成本保证时，把 API 标为 unsafe 比维持虚假的安全抽象更诚实**；0384 则是纯并发实现缺陷（未涉及 API 转 unsafe），只印证"并发不变量优先"（与 6.2.2 的 CVE-2025-68260 教训同向）。
+
+**其他值得关注的公告**（发布日期均已对照 RustSec 公告索引逐条核对，落在 2026-08-02 至 10-27 之内）：
+
+- **zstd-safe / zstd-sys（2026-10-26 集群）**：`DCtx::try_clone` double free（0404）、多场景 use-after-free（0395/0400/0406）、`OutBuffer::around_pos` 暴露未初始化内存（0397）、`InBuffer::pos` 越界读（0405）、`Seekable::decompress` 把 `Vec` 长度设置超过容量（0398），以及 zstd-sys 的 WebAssembly allocator shim 在分配失败时破坏内存（0410）。FFI 封装层的不变量（pos 范围、frame 生命周期、set_len 纪律）再次成为主角[^197^]。
+- **密码学实现**：`pqc_kyber`（0290）与 `cosmian_kyber`（0288）的 AVX2 后端跳过 Fujisaki-Okamoto 隐式拒绝，可被选择密文攻击恢复密钥（HIGH，均发布于 2026-09-18）；`libcrux-hmac-drbg`（0329）与 `libcrux-kem`（0330/0331）存在特定输入下 panic；`bip322`（0334）为 CRITICAL 的地址所有权验证绕过[^198^]。
+- **基础设施 crate**：`rustls`（0285，TLS 1.3 握手消息跨加密层被错误接受）、`wasmtime`（0268/0269，WASIp3 流致宿主堆分配与文件系统沙箱逃逸）、`wasapi`（0332）、`salsa`（0308）、`lockfree`（0284）、`faster-hex`（0306，AVX2 路径越界读）、`stack-graphs`（0302，C API 以 safe extern "C" 导出）、`rkyv`（0233，反序列化 UAF，2026-05-11 报告，2026-08-04 发布）等[^199^]。
+- **维护状态**：`nostr-relay-pool` 于 2026-08-09 被标记 unmaintained（RUSTSEC-2026-0243），功能已并入 `nostr-sdk` ≥0.45.0；此前 RUSTSEC-2026-0224（2026-08-01，窗口前条目）给出的修复版本 0.44.2 更多是过渡方案，迁移到 nostr-sdk 才是长期路径[^200^]。
+
+整体看，"unsound 公告加速"的观察在窗口内延续，且头部 crate 也无法免疫；`cargo audit` 与升级纪律对已公告漏洞收益直接，但属事后拦截。
+
 ## 9. 学术谱系、开放问题与趋势展望
 
 前八章以语义机制、工具工程与政策需求为主线；本章回到学术谱系与前瞻判断：soundness 形式化证明如何从 RustBelt 演进到 VerusBelt、当前各类"已验证"声明的语义天花板在哪里，以及 2026 年最值得跟踪的制度化与 AI 辅助趋势，最后给出证据使用指南。
@@ -471,7 +518,7 @@ unsafe Rust 形式化的学术地基是 RustBelt（POPL 2018）：用 Iris 高�
 
 #### 9.1.2 开放问题清单与工具间 soundness 相互指摘
 
-工程性开放问题已由 AWS 标准库验证论文量化。泛型是最大缺口：9,635 个函数（占被跳过函数的 56%）因编译期单态化被自动 harness 生成跳过；intrinsics 方面 71 个不支持、813 个未建模（721 个为 LLVM SIMD），直接导致 4,778 个 harness 失败[^56^]。并发与弱内存是最深的洞：挑战 7（原子类型）与挑战 27（Arc）均要求证明无数据竞争，截至 2026-03 零被接受解——relaxed 至 SC 排序下的跨线程不变式需要形式化内存模型才能表达[^56^][^4^]。第四类是 provenance 与历史依赖规约：`MaybeUninit` 初始化历史、`Rc::from_raw` 要求指针来自 `into_raw` 等属性无法用普通前置条件表达[^4^]。
+工程性开放问题已由 AWS 标准库验证论文量化。泛型是最大缺口（Kani 0.68 的 Autoharness 已能为泛型函数合成实例化，见 4.2.2，但该缺口尚未重新量化）：9,635 个函数（占被跳过函数的 56%）因编译期单态化被自动 harness 生成跳过；intrinsics 方面 71 个不支持、813 个未建模（721 个为 LLVM SIMD），直接导致 4,778 个 harness 失败[^56^]。并发与弱内存是最深的洞：挑战 7（原子类型）与挑战 27（Arc）均要求证明无数据竞争，截至 2026-03 零被接受解、2026-10-27 复核仍均为 Open——relaxed 至 SC 排序下的跨线程不变式需要形式化内存模型才能表达[^56^][^4^]。第四类是 provenance 与历史依赖规约：`MaybeUninit` 初始化历史、`Rc::from_raw` 要求指针来自 `into_raw` 等属性无法用普通前置条件表达[^4^]。
 
 概念层面还有更深的裂缝：Belt 谱系的语义类型学从不建模任何别名模型，其证明结果"可能与某些编译器优化不兼容"。Tree Borrows（PLDI 2025 杰出论文）在 3 万 crate 评测中把别名违规从 Stacked Borrows 的 6,568 例降至 3,023 例（减 53.97%，仅 31 例反向回归），但"well-typed 安全程序必通过 TB"仅经 Miri 大量测试而未形式化证明，且不存在在 TB 下证明程序正确的程序逻辑框架[^31^]；将 TB 与分离逻辑结合是公开的 future work（ETH 2025 年硕士论文已起步）[^151^]。两个别名模型在接受的程序与允许的优化上互不一致、均非 canonical，任何"无别名 UB"声明都必须注明以哪个模型为准。
 
@@ -481,7 +528,7 @@ unsafe Rust 形式化的学术地基是 RustBelt（POPL 2018）：用 Iris 高�
 
 #### 9.2.1 标准库验证挑战赛的制度化与治理风险
 
-verify-rust-std（2024-11-20 由 AWS 与 Rust Foundation 联合启动，背景为 std 约 3.5 万函数、约 7,500 个 unsafe、近三年 57 个 soundness issue）[^152^] 正从一次性众包沉淀为常态基础设施。制度化的硬证据有三：工具白名单远不足 17 个，且随时间变动：2026-08-02 抓取口径为 4 个批准（Kani、ESBMC/GOTO-Transcoder、VeriFast、Flux）；2026-10-27 复核 model-checking/verify-rust-std 当前清单，README 列 5 个（Flux、ESBMC/GOTO Transcoder、Kani、KMIR、VeriFast），doc/src/tools.md 的 Approved tools 列 6 个（ESBMC、Flux、Kani、KMIR、RAPx、VeriFast），二者本身也不一致；tools.md 当前无"审批中"分节，Verus、Creusot、KRust 均未出现在任一清单。"审批中"一说仅见 2026-03 论文口径（Verus、Creusot、KRust、RAPx；2025-10 论文口径为 RAPx、Creusot、KMIR），其后 RAPx、KMIR 已入批准清单，Verus/Creusot 的现状未能在仓库页面查实，"17 个白名单"口径经官方 tools.md 核实不成立[^153^][^56^][^4^]；CI 工程可行——每次代码变更全量运行 16,748 个 harness，3.97× 加速后单次约 69 分钟[^52^]；函数契约已被接受为实验性语言特性，std 契约插桩正式立项，验证从外部运动进入语言路线图[^56^]。
+verify-rust-std（2024-11-20 由 AWS 与 Rust Foundation 联合启动，背景为 std 约 3.5 万函数、约 7,500 个 unsafe、近三年 57 个 soundness issue）[^152^] 正从一次性众包沉淀为常态基础设施。制度化的硬证据有三：工具白名单远不足 17 个，且随时间变动：2026-08-02 抓取口径为 4 个批准（Kani、ESBMC/GOTO-Transcoder、VeriFast、Flux）；2026-10-27 复核 model-checking/verify-rust-std 当前清单，README 列 5 个（Flux、ESBMC/GOTO Transcoder、Kani、KMIR、VeriFast），doc/src/tools.md 的 Approved tools 列 6 个（ESBMC、Flux、Kani、KMIR、RAPx、VeriFast），二者本身也不一致；tools.md 当前无"审批中"分节，Verus、Creusot、KRust 均未出现在任一清单。"审批中"一说仅见 2026-03 论文口径（Verus、Creusot、KRust、RAPx；2025-10 论文口径为 RAPx、Creusot、KMIR），其后 RAPx、KMIR 已入批准清单（KMIR 的 Tool Application 议题 #296 与 PR #310 均于 2026-08-21 合并/关闭，即审批转认可发生在 2026-08-02 抓取之后）[^179^]，Verus/Creusot 的现状未能在仓库页面查实，"17 个白名单"口径经官方 tools.md 核实不成立[^153^][^56^][^4^]；CI 工程可行——每次代码变更全量运行 16,748 个 harness，3.97× 加速后单次约 69 分钟[^52^]；函数契约已被接受为实验性语言特性，std 契约插桩正式立项，验证从外部运动进入语言路线图[^56^]。
 
 可持续性则有三个未决变量。**治理单点**：PR 须至少两名委员会成员批准方可合并，委员会"主要由 Amazon 员工组成"，24/27 个挑战由 AWS 提出，瓶颈在评审带宽[^154^][^4^]。**证明腐化**：上游每六周一个 release，人工契约产出 2025-10 后进入平台期，契约上游化仍是官方自列的开放挑战[^56^]。**CI 绿灯盲区**：挑战赛（人工 725 个 harness 为约 16 个月的手工积累；16,748 个是 Autoharness 自动生成总量，二者口径不同、不可混为"16 个月 16,748 个"，见 4.2.2）迄今发现**零个**此前未知的内存安全漏洞（论文未按 harness 口径拆分），产出集中在规约缺陷（错误 SAFETY 注释、缺失标注、文档错误）；Lessons 论文作者自认可能有确认偏差，建议并行运行 Miri 等动态分析[^4^]。CI 绿灯的正确读法是"规约卫生＋回归保护"，而非"无 bug"。
 
@@ -497,6 +544,23 @@ verify-rust-std（2024-11-20 由 AWS 与 Rust Foundation 联合启动，背景�
 
 需打折或附前提的宣传："Rust 标准库已被形式化验证"——实际为 989 个函数带契约、11,970 个 harness 通过，不含量最大的别名 UB、数据竞争与部分 provenance UB，"通过当前全部检查的函数在更完整模型下仍可能有 UB"[^56^]；"RustBelt 证明了 Rust 安全"——定理是条件式的，$\lambda$Rust ≠ 真实 Rust[^146^]；"Verus 验证结果被内核背书"——VerusBelt 明确不覆盖实现、VC 翻译与 Z3[^65^]；"最大规模验证运动发现了多少 bug"——零个新内存安全漏洞，价值在规约卫生，且"最大规模"为作者自述，宜保留限定语[^56^]。
 
+#### 9.2.4 未决问题与跟踪节点（截至 2026-10-27）
+
+下表汇总前述各章的未决问题在 2026-08-02 至 2026-10-27 的状态变化：
+
+| 未决项 | 状态 | 依据 |
+|---|---|---|
+| Tree Borrows 何时成为 Miri 默认 | **无变化**：SB 仍默认，TB 可选且更实验性，无 FCP | Miri README、UCG #573（2026-10 核查）[^169^][^170^] |
+| UCG #584 `writable` 之争 | **状态未知**：未核查到 #584 本身的决议或最新讨论（Miri README 提及隐式写调节旗标，不构成 #584 的证据） | UCG #584 未核查 |
+| rust#132898 miscompile | **未修复但有推进**：保守 PR 关闭，精确 gate 方案附验证记录，待评审 | rust#132898[^171^] |
+| `missing_safety_doc` 等 lint 升 hard error 时间表 | **未核查**（1.98 新增的 FFI/运行时符号 lint 与该命题无关，不作依据） | — |
+| SAFETY 注释标准化 | **仍 Pre-RFC/审阅中**：Rust Safety Standard 讨论中；Safety Tags RFC 以 2026-04 论文 v2 为据，当前状态未核查（中低置信） | internals、arXiv v2[^174^][^175^] |
+| FLS 首个 rust-lang 自有版本 | **未见发布**；README 仍声明非 normative | rust-lang/fls[^172^] |
+| std 挑战泛型与并发缺口 | **并发无变化（#7/#27 仍 Open）；泛型为工具能力扩展**（Kani 0.68 Autoharness 支持泛型），被跳过的 9,635 个函数未量化复测，挑战侧是否缩小未核实 | Kani releases、verify-rust-std[^178^][^179^] |
+| gccrs 2026-09 内核构建预期 | **未达成**：官方仍称不能编译内核，core 编译已大幅提速 | LWN 2026-09-22[^184^] |
+
+下一阶段最值得盯的五个节点是：T-opsem 以 iceoryx2 为试点的 normative 文档[^173^]、Safety Tags RFC[^175^]、#132898 修复方案[^171^]、FLS 首版[^172^]与 TB 定案[^170^]。
+
 ## 10. 结论
 
 ### 10.1 核心判断
@@ -511,9 +575,20 @@ verify-rust-std（2024-11-20 由 AWS 与 Rust Foundation 联合启动，背景�
 
 **企业：把分层工具链与供应链审计接入 CI。** 政策压力在上升（但无文件直接要求 unsafe 审计），而供给侧明显滞后：160 名问卷调查受访者中 88% 对所用依赖的 unsafe 审计不足半次，cargo-vet 使用率仅约 7%[^9^]；可行的规模化路径是机构间审计互导（现有 9 家组织共享审计集）而非个人信任网络[^87^]。企业级基线应是"动态检测（Miri/cargo-careful）＋静态验证（Kani 等）＋依赖审计（cargo-vet/cargo-audit）"三层并行，且引用任何"已验证"声明时要求其附保证清单。
 
-**研究者：跟踪规范化进程作为最大中期变量。** Tree Borrows 成为 Miri 默认尚无正式 FCP[^33^]，rust-lang/rust #132898 编译器误编译问题仍 open[^35^]；T-opsem 团队 2026 年目标产出"Normative Documentation for Sound unsafe Rust"，一旦落地，今天大量依赖未文档化上游行为的 unsafe 写法将被重新裁决[^39^]。在此之前，"在两个别名模型下都成立"是最稳妥的保守准则。
+**研究者：跟踪规范化进程作为最大中期变量。** Tree Borrows 成为 Miri 默认尚无正式 FCP（2026-10 复核无变化）[^33^]，rust-lang/rust #132898 编译器误编译问题仍 open，修复方案（精确 place-overlap gate）附验证记录但待评审[^35^][^171^]；T-opsem 团队 2026 年目标产出"Normative Documentation for Sound unsafe Rust"，一旦落地，今天大量依赖未文档化上游行为的 unsafe 写法将被重新裁决[^39^]。在此之前，"在两个别名模型下都成立"是最稳妥的保守准则。
 
 unsafe 边界上的安全论证正沿"SAFETY 注释 → lint 强制 → 机器可读标签 → 契约语言特性"的轨迹从给人看的散文演变为给工具检查的规约[^13^][^57^]；T-opsem 的规范化文档与进入 LLVM 的 BorrowSanitizer[^39^][^40^] 有望使"证明义务形式化"从愿景变为基础设施。
+
+#### 10.1.3 近期行动清单与主线更新（截至 2026-10-27）
+
+2026-08 至 10 月印证了上述主线判断，但重心有所移动：**"语义定案"依旧缓慢**，TB/FLS/SAFETY 标准化都没有跨过临界点；**"工程化与合规化"显著提速**，从 Kani 的泛型支持、挑战赛认可工具扩容，到微软 Tier-1、CRA 义务生效，unsafe 边界的工具与制度投入都在增加。与此同时，tokio 双公告和 panic-safety 聚类说明**抽象设计与析构路径仍是 Rust 事故的主产区**，而 arrayref、定向攻击与 Miri 泄漏则提醒：下一阶段的"Rust 安全"叙事必须把**供应链、维护者与 CI 工具链**纳入同一个威胁模型。最有效的动作仍然朴素：及时升级、审计依赖、把不变量写清楚、让工具（Miri/Kani/loom/cargo audit）在 CI 中长期运行。具体可执行项：
+
+1. **版本纪律**：使用 1.98.0 的项目必须升级到 ≥1.98.1（vtable miscompile）；使用 tokio 1.54.0 的必须升级 ≥1.54.1（该版本已 yank）；评估 1.99 的 `Box::leak` 新文档对既有 unleak 代码的影响[^164^][^193^][^165^]。
+2. **API 迁移**：排查 `AsyncFd::new/with_interest/try_new/try_with_interest` 调用，按 1.51.6/1.53.3/1.54.0 的弃用指引迁移到 `unsafe register`，并把 fd 生命周期不变量写进 SAFETY 注释[^194^]。
+3. **CI 安全**：若 CI 运行 `cargo miri` 且缓存 `target/`，立即按官方指引禁用该 job 缓存或隔离 secrets 并清空旧缓存；通用原则是能写公共缓存的 job 不应接触 secrets[^192^]。
+4. **供应链**：为依赖升级设置冷却期，持续运行 `cargo audit`（可事后发现本窗口 tokio/rustls/zstd 等已公告漏洞，但对 arrayref 这类恶意包无效），维护者按官方建议核验 MFA、登录历史与面试邀约真实性[^190^][^191^]。
+5. **验证工具升级**：含泛型 unsafe 代码的项目可试用 Kani 0.68 的 Autoharness，但仍需用 Miri 覆盖别名 UB，并关注挑战赛 #7/#27 的并发空白[^178^][^179^]。
+6. **长期跟踪**：见 9.2.4 的五个节点。
 
 # 参考文献
 
@@ -681,3 +756,42 @@ unsafe 边界上的安全论证正沿"SAFETY 注释 → lint 强制 → 机器�
 [^159^]: HarnessLLM: Rust Verification Harness Generation with Large Language Models (arXiv:2607.22161) — arXiv，2026-07-24. https://arxiv.org/html/2607.22161v1
 [^160^]: Verus: A Practical Foundation for Systems Verification（SOSP 2024；摘要 6.1K 行实现/31K 行证明，Figure 9 各案例证明比，直读 PDF） — Lattuada et al.，2024-11. https://par.nsf.gov//servlets/purl/10630619
 [^161^]: Advancing security with Windows and Surface: Microsoft SFI report Nov 2025（"70% of the security vulnerabilities that Microsoft resolves each year"与内存安全相关） — Windows Experience Blog（Holdsworth、Abzarian），2025-11-10. https://blogs.windows.com/windowsexperience/2025/11/10/advancing-security-with-windows-and-surface-microsoft-sfi-report-nov-2025/
+[^162^]: Announcing Rust 1.98.0 — Rust 官方博客，2026-08-20. https://blog.rust-lang.org/2026/08/20/Rust-1.98.0/
+[^163^]: Rust Release Notes, Version 1.98.0 (2026-08-20)（Language 栏：runtime symbol 与 c_void_returns lint；这三条 lint 未出现在博客公告中，故引固定版本的 release notes） — Rust 官方文档. https://doc.rust-lang.org/1.98.0/releases.html
+[^164^]: Announcing Rust 1.98.1（修复 vtable 生成 miscompilation） — Rust 官方博客，2026-09-03. https://blog.rust-lang.org/2026/09/03/Rust-1.98.1/
+[^165^]: Announcing Rust 1.99.0（extern "C" variadics、裸指针布局查询、Vec/Box 互转、Box::leak 文档） — Rust 官方博客，2026-10-01. https://blog.rust-lang.org/2026/10/01/Rust-1.99.0/
+[^166^]: Rust 官方博客与 releases 索引（1.99.1，2026-10-15；发布节奏） — Rust 官方，2026-10 抓取. https://blog.rust-lang.org/releases/
+[^167^]: Enabling the next iteration of the borrow checker on nightly（2026-08-04）；Enabling the next-generation trait solver on nightly（2026-08-21） — Rust 官方博客. https://blog.rust-lang.org/2026/08/04/enabling-polonius-alpha-on-nightly/；https://blog.rust-lang.org/2026/08/21/enabling-next-solver-on-nightly/
+[^168^]: RFC 3935 Project Goals 2026（Polonius Alpha、下一代 trait solver、Project Zero） — rust-lang/rfcs. https://github.com/rust-lang/rfcs/blob/master/text/3935-Project-Goals-2026.md
+[^169^]: Miri README（SB 默认、TB 可选与实验性警告） — rust-lang/miri，2026-10 抓取. https://github.com/rust-lang/miri/blob/master/README.md
+[^170^]: UCG #573 Strengthening Tree Borrows so that we can discard Stacked Borrows — rust-lang/unsafe-code-guidelines，2026-10 抓取仍 open. https://github.com/rust-lang/unsafe-code-guidelines/issues/573
+[^171^]: rust-lang/rust #132898 ReferencePropagation introduces UB into code that is accepted by Stacked Borrows — 2026-10 抓取（含 #156896 与精确 gate 方案讨论）. https://github.com/rust-lang/rust/issues/132898
+[^172^]: rust-lang/fls README（FLS 定位与非 normative 声明） — 2026-10 抓取. https://github.com/rust-lang/fls
+[^173^]: Normative Documentation for Sound unsafe Rust（2026 项目目标 #644，iceoryx2 试点） — rust-lang goals. https://goals.rust-lang.org/2026/safe-unsafe-for-safety-critical.html
+[^174^]: Pre-RFC: Rust Safety Standard — Rust Internals，2026-01-31 起. https://internals.rust-lang.org/t/pre-rfc-rust-safety-standard/23963
+[^175^]: Annotating and Auditing the Safety Properties of Unsafe Rust（safety-tags，v2） — arXiv:2504.21312v2，2026-04-22（时点为 2026-04，不能证明 10 月状态）. https://arxiv.org/html/2504.21312v2
+[^176^]: Tracking Issue for stabilizing the sanitizers（rust#123615，总跟踪 issue）与 sanitizers: Stabilize AddressSanitizer and LeakSanitizer（rust#123617，ASan/LSan 稳定化实现 PR，含 Tier 2 默认 ASan target） — rust-lang/rust. https://github.com/rust-lang/rust/issues/123615；https://github.com/rust-lang/rust/pull/123617
+[^177^]: Stabilize MemorySanitizer and ThreadSanitizer Support（2026 项目目标） — rust-lang goals. https://goals.rust-lang.org/2026/stabilization-of-sanitizer-support.html
+[^178^]: Kani 0.68.0 release notes — model-checking/kani，0.68.0 发布于 9 月 16 日（页面未显示年份，2026-10 抓取）. https://github.com/model-checking/kani/releases
+[^179^]: verify-rust-std 挑战赛总表（认可工具含 KMIR；10/29 Resolved；#19 RawVec Resolved by VeriFast；#7/#27 Open） — model-checking/verify-rust-std，2026-10 抓取. https://github.com/model-checking/verify-rust-std；KMIR 认可：Tool Application 议题 #296 与 PR #310（2026-08-21）https://github.com/model-checking/verify-rust-std/pull/310；#19 解：PR #422（2025-08-14 合并）https://github.com/model-checking/verify-rust-std/pull/422
+[^180^]: Prusti releases（正式版停留 2024-03，nightly 持续至 2026-10-23） — viperproject/prusti-dev. https://github.com/viperproject/prusti-dev/releases
+[^181^]: Open-Source NVIDIA "Nova" Driver Sees More Functionality For Linux 7.3 — Phoronix，2026-08-10（Linux 7.3 合并窗口 DRM Rust 变化）. https://www.phoronix.com/news/NVIDIA-Nova-Rust-Linux-7.3
+[^182^]: Introducing Tyr, a new Rust DRM driver — Collabora，2025-07-07（仅支撑 Tyr 的背景，不支撑 RustConf 2026 相关断言）. https://www.collabora.com/news-and-blog/news-and-events/introducing-tyr-a-new-rust-drm-driver.html
+[^183^]: LWN Kangrejos 2026 系列（Charon 10-07、Owning C types 10-13、安全自引用 10-16、跨 crate 前向声明 10-19、XArray 10-20、Rust 未来特性 10-22） — LWN.net. https://lwn.net/Articles/1097198/；https://lwn.net/Articles/1099015/；https://lwn.net/Articles/1099224/；https://lwn.net/Articles/1099596/；https://lwn.net/Articles/1100520/；https://lwn.net/Articles/1099606/
+[^184^]: Compiling the kernel with gccrs（RustConf 2026 与 Kangrejos 演讲报道） — LWN.net，2026-09-22. https://lwn.net/Articles/1095553/
+[^185^]: Guest Post: Rust Is Tier-1 Language at Microsoft — Rust Foundation，2026-09-10. https://rustfoundation.org/media/guest-post-rust-is-tier-1-language-at-microsoft/
+[^186^]: Regulation (EU) 2024/2847（CRA；Art.14 报告义务 2026-09-11 起适用） — EUR-Lex. https://eur-lex.europa.eu/eli/reg/2024/2847/oj
+[^187^]: Memory Safe Languages: Reducing Vulnerabilities in Modern Software Development — CISA/NSA，2025-06-24（2026-10-27 核查本页相关资源栏、CISA 新闻列表首页与网络检索，未见更新；NSA 新闻稿页 403，非穷尽核查）. https://www.cisa.gov/resources-tools/resources/memory-safe-languages-reducing-vulnerabilities-modern-software-development
+[^188^]: DARPA-TRACTOR-Program/PUBLIC-Test-Corpus（公开测试语料与评估脚本） — GitHub，仓库底稿记为 2026-02（窗口前背景）；该仓库 README/Releases 无评估报告；评估报告见 DARPA-TRACTOR-Program/Reports（First_TRACTOR_Evaluation_Report.pdf，2026-02-20 上传、2026-10-26 更新；Second_TRACTOR_Evaluation_Report.pdf，2026-10-26 发布，PDF 正文未读取）. https://github.com/DARPA-TRACTOR-Program/PUBLIC-Test-Corpus/ ; https://github.com/DARPA-TRACTOR-Program/Reports
+[^189^]: Ferrocene 26.08.0 发布公告 — Ferrocene/Ferrous Systems，2026-10-16. https://ferrocene.dev/blogs/ferrocene-26080/
+[^190^]: Supply chain attack on arrayref — Rust 官方博客，2026-08-20. https://blog.rust-lang.org/2026/08/20/supply-chain-attack-on-arrayref/
+[^191^]: Be alert: targeted attacks on prominent Rustaceans — Rust 官方博客，2026-09-17. https://blog.rust-lang.org/2026/09/17/targeted-attacks/
+[^192^]: GitHub Actions leaking secrets when Miri output is cached — Rust 官方博客，2026-09-21. https://blog.rust-lang.org/2026/09/21/github-actions-leaking-secrets-when-miri-output-is-cached/
+[^193^]: RUSTSEC-2026-0384: Race condition in tokio::time::Interval on Tokio v1.54.0 — RustSec，2026-10-22. https://rustsec.org/advisories/RUSTSEC-2026-0384.html
+[^194^]: RUSTSEC-2026-0386: AsyncFd::new and related constructors violate I/O safety — RustSec，2026-10-23. https://rustsec.org/advisories/RUSTSEC-2026-0386.html
+[^195^]: RustSec 公告（panic-safety 系列，12 条） — RustSec. （panic-safety 系列，各条独立页面；发布日期据 RustSec 索引：0254/0256 为 08-12，0267 为 08-24，0272 为 08-31，0274 为 09-01，0282 为 09-09，0291/0292/0293 为 09-21，0298/0300/0301 为 09-22，均在窗口内） https://rustsec.org/advisories/RUSTSEC-2026-0291.html；https://rustsec.org/advisories/RUSTSEC-2026-0292.html；https://rustsec.org/advisories/RUSTSEC-2026-0293.html；https://rustsec.org/advisories/RUSTSEC-2026-0274.html；https://rustsec.org/advisories/RUSTSEC-2026-0298.html；https://rustsec.org/advisories/RUSTSEC-2026-0300.html；https://rustsec.org/advisories/RUSTSEC-2026-0301.html；https://rustsec.org/advisories/RUSTSEC-2026-0282.html；https://rustsec.org/advisories/RUSTSEC-2026-0267.html；https://rustsec.org/advisories/RUSTSEC-2026-0254.html；https://rustsec.org/advisories/RUSTSEC-2026-0256.html；https://rustsec.org/advisories/RUSTSEC-2026-0272.html
+[^196^]: RUSTSEC-2026-0253（lru，panic safety）与 RUSTSEC-2026-0252（orx-split-vec，未初始化读） — RustSec，2026-08-11. https://rustsec.org/advisories/RUSTSEC-2026-0253.html
+[^197^]: zstd-safe / zstd-sys 公告集群（8 条） — RustSec. （据 RustSec 索引，0395/0397/0398/0400/0404/0405/0406/0410 均发布于 2026-10-26） https://rustsec.org/advisories/RUSTSEC-2026-0395.html；https://rustsec.org/advisories/RUSTSEC-2026-0397.html；https://rustsec.org/advisories/RUSTSEC-2026-0398.html；https://rustsec.org/advisories/RUSTSEC-2026-0400.html；https://rustsec.org/advisories/RUSTSEC-2026-0404.html；https://rustsec.org/advisories/RUSTSEC-2026-0405.html；https://rustsec.org/advisories/RUSTSEC-2026-0406.html；https://rustsec.org/advisories/RUSTSEC-2026-0410.html
+[^198^]: pqc_kyber/cosmian_kyber（0290/0288）、libcrux（0329/0330/0331）、bip322（0334）公告 — RustSec. （据 RustSec 索引：0288/0290 为 2026-09-18，0329/0330/0331 为 10-07，0334 为 10-09） https://rustsec.org/advisories/RUSTSEC-2026-0290.html；https://rustsec.org/advisories/RUSTSEC-2026-0288.html；https://rustsec.org/advisories/RUSTSEC-2026-0329.html；https://rustsec.org/advisories/RUSTSEC-2026-0330.html；https://rustsec.org/advisories/RUSTSEC-2026-0331.html；https://rustsec.org/advisories/RUSTSEC-2026-0334.html
+[^199^]: rkyv（0233）、rustls（0285）、wasmtime（0268/0269）、wasapi（0332）、salsa（0308）、lockfree（0284）、faster-hex（0306）、stack-graphs（0302）公告 — RustSec. （据 RustSec 索引：0268/0269 为 08-31，0284/0285 为 09-14，0302 为 09-22，0306 为 09-23，0308 为 09-24，0332 为 10-07；rkyv 0233 为 08-04 发布，在窗口内） https://rustsec.org/advisories/RUSTSEC-2026-0285.html；https://rustsec.org/advisories/RUSTSEC-2026-0268.html；https://rustsec.org/advisories/RUSTSEC-2026-0269.html；https://rustsec.org/advisories/RUSTSEC-2026-0332.html；https://rustsec.org/advisories/RUSTSEC-2026-0308.html；https://rustsec.org/advisories/RUSTSEC-2026-0284.html；https://rustsec.org/advisories/RUSTSEC-2026-0306.html；https://rustsec.org/advisories/RUSTSEC-2026-0302.html；https://rustsec.org/advisories/RUSTSEC-2026-0233.html
+[^200^]: RUSTSEC-2026-0243: nostr-relay-pool is unmaintained（功能并入 nostr-sdk ≥0.45.0） — RustSec，2026-08-09. https://rustsec.org/advisories/RUSTSEC-2026-0243.html
